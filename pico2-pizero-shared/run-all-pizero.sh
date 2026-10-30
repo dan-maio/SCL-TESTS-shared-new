@@ -25,7 +25,10 @@ TESTS=(scl-smp-reloc-sram scl-smp-reloc-psram scl-smp-nolib-sram scl-smp-nolib-p
        scl-fix-reloc-sram scl-fix-reloc-psram scl-fix-nolib-sram scl-fix-nolib-psram
        scl-fix-xip-flash scl-fix-xip-flash-psram
        scl-fix2-reloc-sram scl-fix2-reloc-psram scl-fix2-nolib-sram scl-fix2-nolib-psram
-       scl-fix2-xip-flash scl-fix2-xip-flash-psram)
+       scl-fix2-xip-flash scl-fix2-xip-flash-psram
+       scl-fix-newlib-sram scl-fix2-newlib-sram scl-fix3-static-sram scl-fix3-static-psram
+       scl-fix-optimal-sram scl-fix-optimal-psram scl-fix2-optimal-sram scl-fix2-optimal-psram
+       scl-fix-overlay-sram scl-fix-overlay-psram)
 pass=0; fail=0; first=1
 declare -a RESULTS=()
 export PATH="${ARM_TOOLCHAIN_BIN:-/home/dan/.local/xPacks/@xpack-dev-tools/arm-none-eabi-gcc/15.2.1-1.1.1/.content/bin}:$PATH"

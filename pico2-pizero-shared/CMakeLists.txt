@@ -123,6 +123,11 @@ set(FIX_DIR "${CMAKE_CURRENT_BINARY_DIR}/fixtures")
 file(MAKE_DIRECTORY "${FIX_DIR}")
 set(FIX_CXX -std=c++20 -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit)
 set(FIX_FILES "")
+set(WIN_sram_TEXT 0x20070000)
+set(WIN_sram_DATA 0x20078000)
+set(WIN_psram_TEXT 0x11100000)
+set(WIN_psram_DATA 0x11180000)
+set(slot 0)
 foreach(pair "cpp3|cpp3/cpp3.cpp" "c2|c2/c2.c" "c1|c1/c1.c" "mylib1|mylib1/mylib1.c"
              "mylib2|mylib2/mylib2.c" "libprov|libprov/libprov.c" "libcons|libcons/libcons.c")
     string(REPLACE "|" ";" p "${pair}")
@@ -146,7 +151,29 @@ foreach(pair "cpp3|cpp3/cpp3.cpp" "c2|c2/c2.c" "c1|c1/c1.c" "mylib1|mylib1/mylib
                 -T "${CMAKE_CURRENT_SOURCE_DIR}/../dynamic-shared/test-xip/fixtures-src/ldscripts/xip-split.ld"
                 "${src}" -o "${FIX_DIR}/${n}.so"
         DEPENDS "${src}" VERBATIM)
-    list(APPEND FIX_FILES "${FIX_DIR}/${n}.rel.o" "${FIX_DIR}/${n}.so")
+    add_custom_command(OUTPUT "${FIX_DIR}/${n}.pic.so"
+        COMMAND ${CMAKE_CXX_COMPILER} -x $<IF:$<STREQUAL:${n},cpp3>,c++,c> ${MCU} -fPIC -O0
+                -ffunction-sections -fdata-sections ${lang} ${FIX_INC} -shared -nostartfiles
+                -nostdlib -nodefaultlibs -Wl,-E "${src}" -o "${FIX_DIR}/${n}.pic.so"
+        DEPENDS "${src}" VERBATIM)
+    list(APPEND FIX_FILES "${FIX_DIR}/${n}.rel.o" "${FIX_DIR}/${n}.so" "${FIX_DIR}/${n}.pic.so")
+    # scl::optimal: -fno-pic, linked at this fixture's own slot in each window.
+    foreach(mem IN ITEMS sram psram)
+        math(EXPR tb "${WIN_${mem}_TEXT} + ${slot} * 0x1000" OUTPUT_FORMAT HEXADECIMAL)
+        math(EXPR db "${WIN_${mem}_DATA} + ${slot} * 0x1000" OUTPUT_FORMAT HEXADECIMAL)
+        set(out "${FIX_DIR}/${n}.opt-${mem}.so")
+        add_custom_command(OUTPUT "${out}"
+            COMMAND sed -e "s/__TEXT_BASE__/${tb}/g" -e "s/__DATA_BASE__/${db}/g"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../optimal-shared/fixtures-src/ldscripts/nopic-split.ld"
+                    > "${out}.ld"
+            COMMAND ${CMAKE_CXX_COMPILER} -x $<IF:$<STREQUAL:${n},cpp3>,c++,c> ${MCU} -fno-pic -mlong-calls -O0
+                    -ffunction-sections -fdata-sections ${lang} ${FIX_INC} -shared -nostartfiles -nostdlib
+                    -nodefaultlibs -Wl,-E -Wl,-z,max-page-size=0x100 -Wl,--unresolved-symbols=ignore-all
+                    -T "${out}.ld" "${src}" -o "${out}"
+            DEPENDS "${src}")
+        list(APPEND FIX_FILES "${out}")
+    endforeach()
+    math(EXPR slot "${slot} + 1")
 endforeach()
 add_custom_target(scl-fix-modules DEPENDS ${FIX_FILES})
 
@@ -158,6 +185,9 @@ function(scl_fix_test name loader target ext section top psram iters)
     if("GROUP2" IN_LIST ARGN)
         set(group 2)
     endif()
+    if("GROUP3" IN_LIST ARGN)
+        set(group 3)
+    endif()
     list(APPEND defs TEST_GROUP=${group})
     set(srcs src/fixtures-main.cpp src/embed-arena.S ${UOS_BOARD_UART} ${UOS_BOARD_RTOS_GLUE} ${UOS_BOARD_MULTICORE})
     if(psram)
@@ -167,7 +197,7 @@ function(scl_fix_test name loader target ext section top psram iters)
     if(psram STREQUAL "DATA")
         list(APPEND defs TEST_EXPECT_DATA_TOP=0x11)
     endif()
-    if(NOT loader STREQUAL "LOADER_RELOC")
+    if(loader STREQUAL "LOADER_NOLIB" OR loader STREQUAL "LOADER_XIP")
         list(APPEND defs TEST_CROSS_CALL_LOOKUP)
     endif()
     if(target STREQUAL "scl::xip-dynamic-newlib")
@@ -181,6 +211,17 @@ function(scl_fix_test name loader target ext section top psram iters)
         INCLUDES "${UOS_PORT_DIR}/test/boards/shared"
         LIBRARIES micro-os-plus::cortexm ${target})
     add_dependencies("${name}-hwd" scl-fix-modules)
+    if(loader STREQUAL "LOADER_OPTIMAL")
+        if(psram)
+            set(wt ${WIN_psram_TEXT})
+            set(wd ${WIN_psram_DATA})
+        else()
+            set(wt ${WIN_sram_TEXT})
+            set(wd ${WIN_sram_DATA})
+        endif()
+        target_compile_definitions("${name}-hwd" PRIVATE
+            $<$<COMPILE_LANGUAGE:ASM>:SCL_WINDOW_TEXT=${wt} SCL_WINDOW_DATA=${wd}>)
+    endif()
     target_link_options("${name}-hwd" PRIVATE -Wl,--wrap=main)
     target_compile_definitions("${name}-hwd" PRIVATE
         $<$<COMPILE_LANGUAGE:ASM>:SCL_ARENA_SECTION=${section} SCL_ARENA_BYTES=98304>)
@@ -201,5 +242,59 @@ scl_fix_test(scl-fix2-nolib-sram      LOADER_NOLIB scl::dynamic-nolib      .so  
 scl_fix_test(scl-fix2-nolib-psram     LOADER_NOLIB scl::dynamic-nolib      .so    .psram.scl_arena 0x11 ON   1000 GROUP2)
 scl_fix_test(scl-fix2-xip-flash       LOADER_XIP   scl::xip-dynamic-newlib .so    .bss.scl_arena   0x10 OFF  2000 GROUP2)
 scl_fix_test(scl-fix2-xip-flash-psram LOADER_XIP   scl::xip-dynamic-newlib .so    .psram.scl_arena 0x10 DATA 500  GROUP2)
+scl_fix_test(scl-fix-newlib-sram      LOADER_NEWLIB scl::dynamic-newlib     .pic.so .bss.scl_arena  0x20 OFF 2000)
+scl_fix_test(scl-fix2-newlib-sram     LOADER_NEWLIB scl::dynamic-newlib     .pic.so .bss.scl_arena  0x20 OFF 5000 GROUP2)
+scl_fix_test(scl-fix3-static-sram     LOADER_STATIC scl::static             .pic.so .bss.scl_arena   0x20 OFF 5000 GROUP3)
+scl_fix_test(scl-fix3-static-psram    LOADER_STATIC scl::static             .pic.so .psram.scl_arena 0x11 ON  1000 GROUP3)
+scl_fix_test(scl-fix-optimal-sram     LOADER_OPTIMAL scl::optimal .opt-sram.so  .bss.scl_arena 0x20 OFF 2000)
+scl_fix_test(scl-fix-optimal-psram    LOADER_OPTIMAL scl::optimal .opt-psram.so .bss.scl_arena 0x11 ON  500)
+scl_fix_test(scl-fix2-optimal-sram    LOADER_OPTIMAL scl::optimal .opt-sram.so  .bss.scl_arena 0x20 OFF 5000 GROUP2)
+scl_fix_test(scl-fix2-optimal-psram   LOADER_OPTIMAL scl::optimal .opt-psram.so .bss.scl_arena 0x11 ON  1000 GROUP2)
+
+# ---- the WeAct overlay fixtures: linked with the firmware, one shared window -------
+set(OV_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../overlay-shared/test-overlay/test1/src")
+set_source_files_properties("${OV_SRC}/ov1.c" "${OV_SRC}/ov2.c" PROPERTIES COMPILE_OPTIONS "-fno-pic;-mlong-calls")
+set_source_files_properties("${OV_SRC}/ovcpp.cpp" PROPERTIES COMPILE_OPTIONS
+    "-fno-pic;-mlong-calls;-fno-exceptions;-fno-rtti;-fno-use-cxa-atexit;-fno-unwind-tables;-fno-asynchronous-unwind-tables")
+file(READ "${UOS_PORT_DIR}/test/pico2-pizero/psram-mat-test-250/psram-sram-boot.ld" BOOT_LD)
+function(scl_overlay_test name origin psram iters)
+    set(ld "${BOOT_LD}")
+    string(REGEX REPLACE "(PSRAM \\(rwx\\)[^\n]*\n)" "\\1    OVL   (rwx) : ORIGIN = ${origin}, LENGTH = 16K\n" ld "${ld}")
+    string(REGEX REPLACE "(    \\.psram \\(NOLOAD\\))"
+"    OVERLAY : NOCROSSREFS
+    {
+        .ov1   { KEEP(*(.ov1.text))   KEEP(*(.ov1.rodata))   KEEP(*(.ov1.data)) }
+        .ov2   { KEEP(*(.ov2.text))   KEEP(*(.ov2.rodata))   KEEP(*(.ov2.data)) }
+        .ovcpp { KEEP(*(.ovcpp.text)) KEEP(*(.ovcpp.rodata)) KEEP(*(.ovcpp.data)) }
+    } >OVL AT>FLASH
+    _ov1_lma = LOADADDR(.ov1);     _ov1_size = SIZEOF(.ov1);
+    _ov2_lma = LOADADDR(.ov2);     _ov2_size = SIZEOF(.ov2);
+    _ovcpp_lma = LOADADDR(.ovcpp); _ovcpp_size = SIZEOF(.ovcpp);
+    _ovl_vma = ADDR(.ov1);
+
+\\1" ld "${ld}")
+    set(ld_file "${CMAKE_BINARY_DIR}/${name}.ld")
+    file(WRITE "${ld_file}" "${ld}")
+    set(defs TRACE SEMIHOST HW_BUILD TEST_NAME="${name}" TEST_ITERS=${iters})
+    set(srcs src/overlay-main.cpp "${OV_SRC}/ov1.c" "${OV_SRC}/ov2.c" "${OV_SRC}/ovcpp.cpp"
+        ${UOS_BOARD_UART} ${UOS_BOARD_RTOS_GLUE} ${UOS_BOARD_MULTICORE})
+    if(psram)
+        list(APPEND defs TEST_PSRAM PICO2_PSRAM_COPY=1 PICO2_PSRAM_CS_PIN=47)
+        list(APPEND srcs ${UOS_BOARD_PSRAM})
+    endif()
+    uos_add_app("${name}-hwd"
+        SOURCES ${srcs}
+        NCPU ${UOS_BOARD_NCPU}
+        LINKER_SCRIPT "${ld_file}"
+        DEFINES ${defs}
+        INCLUDES "${UOS_PORT_DIR}/test/boards/shared" "${FIX_SRC}/include"
+        LIBRARIES micro-os-plus::cortexm scl::overlay)
+    target_link_options("${name}-hwd" PRIVATE -Wl,--wrap=main)
+    set_target_properties("${name}-hwd" PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test")
+    list(APPEND SCL_FIX_TESTS "${name}-hwd")
+    set(SCL_FIX_TESTS "${SCL_FIX_TESTS}" PARENT_SCOPE)
+endfunction()
+scl_overlay_test(scl-fix-overlay-sram  0x20070000 OFF 5000)
+scl_overlay_test(scl-fix-overlay-psram 0x11100000 ON  1000)
 
 add_custom_target(scl-fix-all DEPENDS ${SCL_FIX_TESTS})

@@ -76,6 +76,18 @@ no lock after publication.
 The `scl-fix2-*` tests run the same loaders and memories on `libprov`, `libcons` and
 `mylib2` (5000 or 1000 iterations for reloc and nolib; 2000 or 500 for XIP).
 
+More loaders on the same fixtures, all read over semihosting at boot:
+
+| Tests | Loader | Fixtures | Code runs from |
+|---|---|---|---|
+| `scl-fix-newlib-sram`, `scl-fix2-newlib-sram` | `scl::dynamic-newlib` | groups 1 and 2, plain `-fPIC` | SRAM (heap) |
+| `scl-fix3-static-sram`, `scl-fix3-static-psram` | `scl::static` | `libprov`, `libcons`, `mylib1`, `mylib2`, plain `-fPIC` | SRAM, PSRAM |
+| `scl-fix-optimal-*`, `scl-fix2-optimal-*` | `scl::optimal` | groups 1 and 2, `-fno-pic` at fixed addresses | SRAM, PSRAM windows |
+| `scl-fix-overlay-sram`, `scl-fix-overlay-psram` | `scl::overlay` | `ov1`, `ov2`, `ovcpp`, linked with the firmware | SRAM, PSRAM window |
+
+`scl::static` skips the `c1`/`c2`/`cpp3` cycle, as the WeAct static tests do. Overlays are
+swapped only at boot: `ovcpp` stays resident and both cores call it.
+
 Each fixture test first prints every fixture call with its traces, on core 0 and then
 on core 1, like the WeAct apps. Traces are off for the stress loop that follows.
 
@@ -98,24 +110,25 @@ results there.
 
 ## Status
 
-Two consecutive runs of all 14 tests passed on the board (2026-10-30), against
-SCL-shared-new `e60801e` plus the `dl.cpp` fix below, committed as `20c30b3` with doc
-changes. Both free workers ran on both
-cores in the runs inspected.
+One full run of all 30 tests passed on the board (2026-10-30), against SCL-shared-new
+`20c30b3` plus the `elf-reader.cpp` fix below, committed as `9696b85`. Both free workers ran on both cores in
+almost every test; `scl-fix3-static-psram` once kept one on core 0.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.
 
 The port's `hw.sh` advises one test per power cycle. These runs did not power-cycle
 between tests.
 
-The `scl-fix2-*` tests passed in one run. After the walkthroughs and live runner were
-added, three tests were re-run and passed; all 20 have not yet run together with them.
-
 ## What the board showed
 
 - **A flash module's imports must not use a PLT.** A PLT reads a GOT in flash, which
   the loader cannot patch: the load succeeded, and the first import call hung. Build
   the PIC module with `-mlong-calls`, so imports go through the RAM GOT via `r10`.
+- **`scl::static` ignored `.rel.plt` when `.rel.dyn` was missing.** The load reported
+  success with every import unpatched, and the first import call jumped to the PLT
+  stub's offset. Libraries from the default linker script have only `.rel.plt`. This is
+  also what the `missing relocation/dynsym/dynstr data` lines in the WeAct `static-drv`
+  logs were, so that test's behaviour changes with the fix and needs a re-run.
 - **Load after static constructors.** SCL's globals (`g_main_ctx`, `g_handles`, XIP's
   `g_ctx`) are C++ objects. A load from an earlier constructor is wiped when they are
   constructed, and the failure only shows at the first call-time lookup. These tests
@@ -136,7 +149,7 @@ added, three tests were re-run and passed; all 20 have not yet run together with
 ## Not tested
 
 - Loading or unloading after SMP has started, which this design excludes.
-- `scl::static`, `scl::optimal`, `scl::overlay`, and `xip::static`.
+- `scl::xip-static` and `scl::xip-dynamic-nolib`.
 - The C++ exception fixtures (`ehx_catch`, `libcppeh`, `libcppsh`), and the STM32 driver
   fixtures (`libspi`, `libled`, `libuart`).
 - Fixture functions that write their own state without a lock, on two cores at once.

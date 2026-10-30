@@ -3,6 +3,7 @@
  * @brief The WeAct fixtures on the dual-core RP2350.
  *
  * TEST_GROUP 1 loads cpp3, c2, c1, mylib1. TEST_GROUP 2 loads libprov, libcons, mylib2.
+ * TEST_GROUP 3 adds mylib1 to group 2, for scl::static, which has no cyclic imports.
  *
  * Same rule as main.cpp: load and patch on core 0, at boot, then start SMP. As on the
  * WeAct board the fixtures are read from the host over semihosting. For XIP they are
@@ -34,6 +35,15 @@
 #include "loader/sources/memory-byte-source.hpp"
 #elif defined(TEST_LOADER_XIP)
 #include "xip/dynamic-newlib/adapter.hpp"
+#elif defined(TEST_LOADER_NEWLIB)
+#include "dynamic-newlib/dynamic-linker.hpp"
+#include "dynamic-newlib/link-context.hpp"
+#include "loader/sources/memory-byte-source.hpp"
+#elif defined(TEST_LOADER_OPTIMAL)
+#include "optimal/loader.hpp"
+#elif defined(TEST_LOADER_STATIC)
+#include "elf-reader.h"
+#include "module.h"
 #endif
 
 #include <cmath>
@@ -182,8 +192,8 @@ double fixture_log(double x) { return static_cast<double>(logf(static_cast<float
 float __aeabi_d2f(double);
 double __aeabi_f2d(float);
 
-#if defined(TEST_LOADER_XIP)
-/* dynamic-newlib reads main's relocation table from here. This firmware has none. */
+#if defined(TEST_LOADER_XIP) || defined(TEST_LOADER_NEWLIB) || defined(TEST_LOADER_STATIC)
+/* These loaders read main's relocation table from here. This firmware has none. */
 extern const u32 _reloc[10];
 const u32 _reloc[10] = {};
 #endif
@@ -262,6 +272,9 @@ struct Fixtures {
         c1_call_c2, c1_use_fm, c1_state, library_function, retstr;
 #else
     Fn prov_value, cons_call, lf, lf2, lf3, xxx;
+#if TEST_GROUP == 3
+    Fn library_function, retstr;
+#endif
 #endif
 } g_fx;
 
@@ -280,9 +293,12 @@ constexpr std::size_t kStageEach = 32 * 1024;
 #if TEST_GROUP == 1
 constexpr int kCount = 4, kSetCount = 3;
 const char* const kNames[kCount] = {"cpp3", "c2", "c1", "mylib1"};
-#else
+#elif TEST_GROUP == 2
 constexpr int kCount = 3, kSetCount = 2;
 const char* const kNames[kCount] = {"libprov", "libcons", "mylib2"};
+#else
+constexpr int kCount = 4, kSetCount = 2;
+const char* const kNames[kCount] = {"libprov", "libcons", "mylib1", "mylib2"};
 #endif
 alignas(8) std::byte g_stage[kCount][kStageEach];
 std::size_t g_size[kCount];
@@ -417,6 +433,72 @@ bool load_fixtures() {
     GET(prov_value, 0); GET(cons_call, 1);
     GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
 #endif
+#elif defined(TEST_LOADER_NEWLIB)
+    static firmware::link_context ctx;
+    ctx.set_symtab(reinterpret_cast<const firmware::sym_entry*>(kMainSyms), kNumSyms);
+    static firmware::dynamic_linker linker(ctx);
+    static firmware::library* h[kCount];
+    for (int i = 0; i < kCount; ++i) {
+        loader::memory_byte_source src{std::span<const std::byte>{g_stage[i], g_size[i]}};
+        auto r = linker.load_from_source(src);
+        if (!r) { g_boot_error = "load_from_source"; return false; }
+        h[i] = *r;
+    }
+    auto sym = [](firmware::library* m, const char* n) {
+        auto v = linker.lookup(m, n);
+        return v ? reinterpret_cast<fn2>(*v) : nullptr;
+    };
+#define GET(field, i) ok = ok && set(g_fx.field, sym(h[i], #field), 0, "missing " #field)
+#if TEST_GROUP == 1
+    GET(cpp3_method, 0); GET(cpp3_recurse, 0); GET(cpp3_float_cross, 0); GET(cpp3_heap, 0);
+    GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
+    GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
+    GET(library_function, 3); GET(retstr, 3);
+#else
+    GET(prov_value, 0); GET(cons_call, 1);
+    GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
+#endif
+#elif defined(TEST_LOADER_OPTIMAL)
+    alignas(4) static std::byte blob[2048];
+    static scl::symtab::view table;
+    const u32 at = reinterpret_cast<u32>(blob);
+    table = scl::symtab::view(blob, scl::symtab::build_blob(kMainSyms, kNumSyms, blob, sizeof blob, at), at);
+    if (!table.valid()) { g_boot_error = "symbol blob"; return false; }
+    xip::nopic::set_main_symbols(scl::symtab::source(table));
+    static optimal::Module h[kCount];
+    for (int i = 0; i < kCount; ++i) {
+        if (!h[i].load(std::span<const std::byte>{g_stage[i], g_size[i]})) {
+            g_boot_error = "nopic load";
+            return false;
+        }
+    }
+    xip::nopic::resolve_all();   // the fixtures that import from each other
+#define GET(field, i) ok = ok && set(g_fx.field, reinterpret_cast<fn2>(h[i].sym(#field)), 0, "missing " #field)
+#if TEST_GROUP == 1
+    GET(cpp3_method, 0); GET(cpp3_recurse, 0); GET(cpp3_float_cross, 0); GET(cpp3_heap, 0);
+    GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
+    GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
+    GET(library_function, 3); GET(retstr, 3);
+#else
+    GET(prov_value, 0); GET(cons_call, 1);
+    GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
+#endif
+#elif defined(TEST_LOADER_STATIC)
+    static elf_loader::symbol_table syms;
+    syms.add_entries(kMainSyms, kNumSyms);
+    static scl::Module h[kCount];
+    const std::size_t slot = static_cast<std::size_t>(_simage_arena_end - _simage_arena_start) / kCount;
+    for (int i = 0; i < kCount; ++i) {
+        if (!h[i].load_buf(reinterpret_cast<const uint8_t*>(g_stage[i]), g_size[i],
+                           _simage_arena_start + i * slot, slot, &syms)) {
+            g_boot_error = "Module::load_buf";
+            return false;
+        }
+    }
+#define GET(field, i) ok = ok && set(g_fx.field, h[i].sym<fn2>(#field), 0, "missing " #field)
+    GET(prov_value, 0); GET(cons_call, 1);
+    GET(library_function, 2); GET(retstr, 2);
+    GET(lf, 3); GET(lf2, 3); GET(lf3, 3); GET(xxx, 3);
 #elif defined(TEST_LOADER_XIP)
     xip::newlib::set_symtab(kMainSyms, kNumSyms);
     if (!provision_flash()) return false;
@@ -478,6 +560,12 @@ void boot_load() {
     g_c1_base = call(g_fx.c1_state);
 #else
     if (call(g_fx.prov_value, 5) != 105u) { g_boot_error = "libprov prov_value"; return; }
+#if TEST_GROUP == 3
+    if (std::strcmp(reinterpret_cast<const char*>(call(g_fx.retstr)), "Hello mylib1!") != 0) {
+        g_boot_error = "mylib1 retstr";
+        return;
+    }
+#endif
 #endif
     g_boot_error = nullptr;
     g_trace = 0;
@@ -538,6 +626,12 @@ void walkthrough(unsigned core) {
     show("lf2(7)", call(g_fx.lf2, 7));
     show("lf3(7)", call(g_fx.lf3, 7));
     show("xxx()", call(g_fx.xxx));
+#if TEST_GROUP == 3
+    show("library_function(42)", call(g_fx.library_function, 42));
+    say("  retstr() = \"");
+    say(reinterpret_cast<const char*>(call(g_fx.retstr)));
+    say("\"\n");
+#endif
 #endif
     g_trace = 0;
 }
@@ -608,6 +702,9 @@ void* worker(void* arg) {
         const u32 three = call(g_fx.lf3, i);                 // calls w() in main
         app_unlock();
         expect(three == 2u * ((i + 23u) + (i * 3u + 2u) + (i + 20u)), 5);
+#if TEST_GROUP == 3
+        expect(call(g_fx.library_function, 39) == 62u, 6);
+#endif
 #endif
         w->cores_seen = w->cores_seen | (1u << (port_cpu_id() & 1u));
         if ((i & 0x7Fu) == 0) this_thread::yield();
@@ -683,9 +780,9 @@ int os_main(int, char*[]) {
         if (!first_bad) first_bad = w.first_bad;
     }
     [[maybe_unused]] const u32 total = kWorkers * kIters;
+    sayf("  workers done=%u errors=%u first failing check=%u\n", done, errors, first_bad);
 #if TEST_GROUP == 1
     const u32 hits = call(g_fx.c2_state) - g_hits_base, c1 = call(g_fx.c1_state) - g_c1_base;
-    sayf("  workers done=%u errors=%u first failing check=%u\n", done, errors, first_bad);
     sayf("  c2 hits=%u of %u; c1 calls=%u of %u\n", hits, kHitsPerIter * total, c1, total);
 #endif
     sayf("  free threads saw cores 0x%x 0x%x\n", g_workers[2].cores_seen, g_workers[3].cores_seen);
