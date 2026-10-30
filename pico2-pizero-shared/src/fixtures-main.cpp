@@ -905,7 +905,7 @@ void walkthrough(unsigned core) {
     show("c2_state()", call(g_fx.c2_state));
     show("c1_state()", call(g_fx.c1_state));
 #elif TEST_GROUP == 6
-    show("led_blink(3) [watch the LED], total blinks", call(g_fx.led_blink, 3, 400000));
+    show("led_blink(3) [watch the LED], total blinks", call(g_fx.led_blink, 3, 4000000));
     show("led_is_on()", call(g_fx.led_is_on));
     {
         char l[64];
