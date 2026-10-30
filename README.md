@@ -79,7 +79,7 @@ was skipping, leaving their imports unpatched.
 ## Pi-Zero RP2350B status (verified)
 
 All 77 SMP loader tests, 69 of them using the shared fixtures, passed on the board in one
-full run. They cover every loader, in SRAM, PSRAM and flash as each allows, C++
+full run, re-run after slowing the LED blink, which was then seen blinking in the `scl-fix6-*` tests. They cover every loader, in SRAM, PSRAM and flash as each allows, C++
 exceptions, per-core interrupts and missing-import reporting. See
 `pico2-pizero-shared/README.md`, and `docs/LOADER-CHOICE.md` for what it means when choosing.
 
