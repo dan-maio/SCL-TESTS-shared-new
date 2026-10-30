@@ -19,7 +19,9 @@ FILTER="${1:-}"
 LOGDIR="$HERE/logs/pizero-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$LOGDIR"
 TESTS=(scl-smp-reloc-sram scl-smp-reloc-psram scl-smp-nolib-sram scl-smp-nolib-psram scl-smp-xip-flash
-       scl-smp-xip-flash-psram scl-smp-reloc-psram-big scl-smp-nolib-psram-big)
+       scl-smp-xip-flash-psram scl-smp-reloc-psram-big scl-smp-nolib-psram-big
+       scl-fix-reloc-sram scl-fix-reloc-psram scl-fix-nolib-sram scl-fix-nolib-psram
+       scl-fix-xip-flash scl-fix-xip-flash-psram)
 pass=0; fail=0; first=1
 for t in "${TESTS[@]}"; do
     [[ -n "$FILTER" && ! "$t" =~ $FILTER ]] && continue

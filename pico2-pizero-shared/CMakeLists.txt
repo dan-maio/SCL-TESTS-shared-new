@@ -96,6 +96,7 @@ function(scl_smp_test name loader target module section top psram iters)
         INCLUDES "${UOS_PORT_DIR}/test/boards/shared"
         LIBRARIES micro-os-plus::cortexm ${target})
     add_dependencies("${name}-hwd" scl-smp-modules)
+    target_link_options("${name}-hwd" PRIVATE -Wl,--wrap=main)
     target_compile_definitions("${name}-hwd" PRIVATE
         $<$<COMPILE_LANGUAGE:ASM>:SMPMOD_PATH="${module}" SCL_ARENA_SECTION=${section} SCL_ARENA_BYTES=${arena}>)
     set_target_properties("${name}-hwd" PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test")
@@ -113,3 +114,79 @@ scl_smp_test(scl-smp-reloc-psram-big  LOADER_RELOC scl::reloc              "${MO
 scl_smp_test(scl-smp-nolib-psram-big  LOADER_NOLIB scl::dynamic-nolib      "${MOD_SO_BIG}"  .psram.scl_arena 0x11 ON   200 BIG)
 
 add_custom_target(scl-smp-all DEPENDS ${SCL_SMP_TESTS})
+
+# ---- the WeAct fixtures, read over semihosting at boot --------------------------
+set(FIX_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../relocatable-shared/test/fixtures-src")
+set(FIX_INC -I${FIX_SRC}/include -I${FIX_SRC}/c1 -I${FIX_SRC}/c2 -I${FIX_SRC}/cpp3 -I${FIX_SRC}/mylib1)
+set(FIX_DIR "${CMAKE_CURRENT_BINARY_DIR}/fixtures")
+file(MAKE_DIRECTORY "${FIX_DIR}")
+set(FIX_CXX -std=c++20 -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit)
+set(FIX_FILES "")
+foreach(pair "cpp3|cpp3/cpp3.cpp" "c2|c2/c2.c" "c1|c1/c1.c" "mylib1|mylib1/mylib1.c")
+    string(REPLACE "|" ";" p "${pair}")
+    list(GET p 0 n)
+    list(GET p 1 s)
+    set(src "${FIX_SRC}/${s}")
+    if(s MATCHES "cpp$")
+        set(lang ${FIX_CXX})
+    else()
+        set(lang -std=gnu11)
+    endif()
+    add_custom_command(OUTPUT "${FIX_DIR}/${n}.rel.o"
+        COMMAND ${CMAKE_CXX_COMPILER} -x $<IF:$<STREQUAL:${n},cpp3>,c++,c> ${MCU} -mlong-calls -fno-pic -Os -ffreestanding
+                -fno-common ${lang} ${FIX_INC} -c "${src}" -o "${FIX_DIR}/${n}.tmp.o"
+        COMMAND ${CMAKE_LINKER} -r "${FIX_DIR}/${n}.tmp.o" -o "${FIX_DIR}/${n}.rel.o"
+        DEPENDS "${src}" VERBATIM)
+    add_custom_command(OUTPUT "${FIX_DIR}/${n}.so"
+        COMMAND ${CMAKE_CXX_COMPILER} -x $<IF:$<STREQUAL:${n},cpp3>,c++,c> ${MCU} -fpic -msingle-pic-base -mpic-register=r10
+                -mno-pic-data-is-text-relative -O0 -ffunction-sections -fdata-sections
+                ${lang} ${FIX_INC} -shared -nostartfiles -nostdlib -nodefaultlibs -Wl,-E -Wl,-Bsymbolic
+                -T "${CMAKE_CURRENT_SOURCE_DIR}/../dynamic-shared/test-xip/fixtures-src/ldscripts/xip-split.ld"
+                "${src}" -o "${FIX_DIR}/${n}.so"
+        DEPENDS "${src}" VERBATIM)
+    list(APPEND FIX_FILES "${FIX_DIR}/${n}.rel.o" "${FIX_DIR}/${n}.so")
+endforeach()
+add_custom_target(scl-fix-modules DEPENDS ${FIX_FILES})
+
+# name  loader-define  scl-target  extension  arena-section  text MSB  psram  iterations
+function(scl_fix_test name loader target ext section top psram iters)
+    set(defs TRACE SEMIHOST HW_BUILD TEST_${loader} TEST_NAME="${name}" TEST_EXPECT_TEXT_TOP=${top}
+        TEST_ITERS=${iters} FIXTURE_DIR="${FIX_DIR}" FIXTURE_EXT="${ext}")
+    set(srcs src/fixtures-main.cpp src/embed-arena.S ${UOS_BOARD_UART} ${UOS_BOARD_RTOS_GLUE} ${UOS_BOARD_MULTICORE})
+    if(psram)
+        list(APPEND defs TEST_PSRAM PICO2_PSRAM_COPY=1 PICO2_PSRAM_CS_PIN=47)
+        list(APPEND srcs ${UOS_BOARD_PSRAM})
+    endif()
+    if(psram STREQUAL "DATA")
+        list(APPEND defs TEST_EXPECT_DATA_TOP=0x11)
+    endif()
+    if(NOT loader STREQUAL "LOADER_RELOC")
+        list(APPEND defs TEST_CROSS_CALL_LOOKUP)
+    endif()
+    if(target STREQUAL "scl::xip-dynamic-newlib")
+        list(APPEND srcs "${CMAKE_CURRENT_SOURCE_DIR}/../SCL-shared/src/image-memory.cpp")
+    endif()
+    uos_add_app("${name}-hwd"
+        SOURCES ${srcs}
+        NCPU ${UOS_BOARD_NCPU}
+        LINKER_SCRIPT "${UOS_PORT_DIR}/test/pico2-pizero/psram-mat-test-250/psram-sram-boot.ld"
+        DEFINES ${defs}
+        INCLUDES "${UOS_PORT_DIR}/test/boards/shared"
+        LIBRARIES micro-os-plus::cortexm ${target})
+    add_dependencies("${name}-hwd" scl-fix-modules)
+    target_link_options("${name}-hwd" PRIVATE -Wl,--wrap=main)
+    target_compile_definitions("${name}-hwd" PRIVATE
+        $<$<COMPILE_LANGUAGE:ASM>:SCL_ARENA_SECTION=${section} SCL_ARENA_BYTES=98304>)
+    set_target_properties("${name}-hwd" PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test")
+    list(APPEND SCL_FIX_TESTS "${name}-hwd")
+    set(SCL_FIX_TESTS "${SCL_FIX_TESTS}" PARENT_SCOPE)
+endfunction()
+
+scl_fix_test(scl-fix-reloc-sram      LOADER_RELOC scl::reloc              .rel.o .bss.scl_arena   0x20 OFF  2000)
+scl_fix_test(scl-fix-reloc-psram     LOADER_RELOC scl::reloc              .rel.o .psram.scl_arena 0x11 ON   500)
+scl_fix_test(scl-fix-nolib-sram      LOADER_NOLIB scl::dynamic-nolib      .so    .bss.scl_arena   0x20 OFF  2000)
+scl_fix_test(scl-fix-nolib-psram     LOADER_NOLIB scl::dynamic-nolib      .so    .psram.scl_arena 0x11 ON   500)
+scl_fix_test(scl-fix-xip-flash       LOADER_XIP   scl::xip-dynamic-newlib .so    .bss.scl_arena   0x10 OFF  2000)
+scl_fix_test(scl-fix-xip-flash-psram LOADER_XIP   scl::xip-dynamic-newlib .so    .psram.scl_arena 0x10 DATA 500)
+
+add_custom_target(scl-fix-all DEPENDS ${SCL_FIX_TESTS})

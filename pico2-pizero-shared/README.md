@@ -10,8 +10,8 @@ SCL on the Pi-Zero RP2350B (2x Cortex-M33, 16 MB flash, 8 MB QSPI PSRAM) under t
 
 | Step | Where | What runs |
 |---|---|---|
-| 1 | constructor 101 (`rtos-glue.cpp`) | clocks, UART, heap |
-| 2 | constructor 150 (`boot_load()`) | PSRAM init, module load and patch, on core 0 with core 1 in the bootrom |
+| 1 | constructor 101 (`rtos-glue.cpp`), then the other static constructors | clocks, UART, heap, SCL's globals |
+| 2 | `__wrap_main()` (`boot_load()`) | PSRAM init, module load and patch, on core 0 with core 1 in the bootrom |
 | 3 | same | `scl_publish_release()`, then `g_published = 1` |
 | 4 | kernel `main()`, then `os_main()` | checks the load and creates the threads |
 | 5 | `os_main()` | `multicore::launch_core1()`; SMP is running |
@@ -46,11 +46,38 @@ Each test checks that:
 In the tests with PSRAM `scl_cache_clean` and `scl_cache_invalidate` do real RP2350 XIP
 cache maintenance.
 
+## Tests with the WeAct fixtures
+
+These run the fixtures the WeAct suites use: `cpp3`, `c2` and `c1`, which import from
+each other, plus `mylib1`. As on the WeAct board they are read from the host over
+semihosting at boot; for XIP they are patched and written to flash at the 8 MB offset
+through the bootrom, then loaded from there.
+
+| Test | Loader | Code runs from | Data | Iterations per worker |
+|---|---|---|---|---|
+| `scl-fix-reloc-sram` | `scl::reloc`, `load_set` | SRAM | SRAM | 2000 |
+| `scl-fix-reloc-psram` | `scl::reloc`, `load_set` | PSRAM | PSRAM | 500 |
+| `scl-fix-nolib-sram` | `scl::dynamic-nolib`, eager, cross-call | SRAM | SRAM | 2000 |
+| `scl-fix-nolib-psram` | `scl::dynamic-nolib`, eager, cross-call | PSRAM | PSRAM | 500 |
+| `scl-fix-xip-flash` | `scl::xip-dynamic-newlib`, cross-call | flash (XIP) | SRAM | 2000 |
+| `scl-fix-xip-flash-psram` | `scl::xip-dynamic-newlib`, cross-call | flash (XIP) | PSRAM | 500 |
+
+Each iteration runs `cpp3_method` (libm through main), `c2_param`, `c1_use_fm`,
+`library_function` and `cpp3_heap` (main's heap) concurrently. It then runs `c2_add`,
+`cpp3_float_cross`, `cpp3_recurse` and `c1_call_c2` under main's lock, because those
+bump fixture counters that have no lock of their own, and checks the counts at the end.
+
+Under the `r10` models, calls between modules and into main go through a trampoline
+whose lookup is loader code, run at call time on both cores: 264000 lock acquisitions
+in the 2000-iteration tests. Those tests therefore expect call-time locking, and need
+a real recursive loader lock, which `fixtures-main.cpp` provides. `scl::reloc` takes
+no lock after publication.
+
 ## Run
 
 ```sh
 cmake -S . -B build
-cmake --build build --target scl-smp-all
+cmake --build build --target scl-smp-all scl-fix-all
 ./run-all-pizero.sh                 # all tests
 ./run-all-pizero.sh psram           # a subset
 POWER_CYCLE=1 ./run-all-pizero.sh   # wait for a power cycle between tests
@@ -64,8 +91,10 @@ results there.
 
 ## Status
 
-Three consecutive runs of all eight tests passed on the board (2026-10-30), against
-SCL-shared-new `e60801e`. Both free workers ran on both cores in the runs inspected.
+Two consecutive runs of all 14 tests passed on the board (2026-10-30), against
+SCL-shared-new `e60801e` plus the `dl.cpp` fix below, committed as `20c30b3` with doc
+changes. Both free workers ran on both
+cores in the runs inspected.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.
 
@@ -77,6 +106,18 @@ between tests.
 - **A flash module's imports must not use a PLT.** A PLT reads a GOT in flash, which
   the loader cannot patch: the load succeeded, and the first import call hung. Build
   the PIC module with `-mlong-calls`, so imports go through the RAM GOT via `r10`.
+- **Load after static constructors.** SCL's globals (`g_main_ctx`, `g_handles`, XIP's
+  `g_ctx`) are C++ objects. A load from an earlier constructor is wiped when they are
+  constructed, and the failure only shows at the first call-time lookup. These tests
+  load from `__wrap_main()`.
+- **Eager binding broke cross-call.** `dl_set_lazy_binding(false)` also skipped recording
+  the `.rel.dyn` table the cross-call router reads, so those slots stayed empty. Fixed
+  in `20c30b3`.
+- **A missing import is not reported under cross-call.** A symbol absent from main's
+  table (`puts`, from a `printf` GCC rewrote) loaded without error and faulted at
+  `PC=0` when called. This is not fixed.
+- **Writing flash slows it.** After the bootrom write, flash stays in serial read mode
+  until reconfigured: `scl-fix-xip-flash` takes about 80 s.
 - **`dl_set_symtab()` did not link on non-PIE firmware**, because `dl.cpp` still
   references `from_self()`. `_DYNAMIC` is now weak (SCL-shared-new `36ac5e6`).
 - **RP2350 has no global exclusive monitor**, so `LDREX`/`STREX` in a module do not
@@ -86,5 +127,8 @@ between tests.
 
 - Loading or unloading after SMP has started, which this design excludes.
 - `scl::static`, `scl::optimal`, `scl::overlay`, and `xip::static`.
+- The other WeAct fixtures: `libprov`, `libcons`, `mylib2`, and the C++ exception ones
+  (`ehx_catch`, `libcppeh`, `libcppsh`). `dynamic-nolib` has only 4 handles.
+- Fixture functions that write their own state without a lock, on two cores at once.
 - Module code that blocks or creates threads, or runs in an ISR.
 - Long soak runs: each run lasts seconds.

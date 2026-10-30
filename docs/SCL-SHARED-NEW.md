@@ -100,4 +100,8 @@ git commit -m "bump SCL-shared-new"
 - NUCLEO-F411RE hardware validation (the suites support `SCL_BOARD=nucleo`).
 - Cache overrides on a Cortex-M7. `pico2-pizero-shared/` covers SMP and the
   RP2350's XIP cache.
-- Re-run the WeAct suite at `36ac5e6`, which made `_DYNAMIC` weak.
+- Re-run the WeAct suite at `20c30b3`: `36ac5e6` made `_DYNAMIC` weak, and `20c30b3` changed
+  `dlopen_source`.
+- Report a missing import at load when cross-call is on; today it faults at `PC=0`
+  when called.
+- Move `SCL-EXAMPLES-shared-new` to `20c30b3`.

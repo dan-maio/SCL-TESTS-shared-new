@@ -223,7 +223,7 @@ bool load_module(std::span<const std::byte> image) {
 }
 
 /* Boot time: core 1 is still in the bootrom and the kernel's main() has not run. */
-__attribute__((constructor(150))) void boot_load() {
+void boot_load() {
     g_boot_cpu = port_cpu_id();
 #if defined(TEST_PSRAM)
     if (!psram::init()) { g_boot_error = "psram::init"; return; }
@@ -242,6 +242,17 @@ __attribute__((constructor(150))) void boot_load() {
     scl_publish_release();
     g_published = 1;
 }
+}  // namespace
+
+/* Linked with --wrap=main: every static constructor has run, including SCL's own, and
+ * the kernel's main() has not. A load from an earlier constructor would be wiped when
+ * SCL's globals are constructed afterwards. */
+extern "C" int __real_main(int, char**);
+extern "C" int __wrap_main(int argc, char** argv) {
+    boot_load();
+    return __real_main(argc, argv);
+}
+namespace {
 
 // ---- local copies of the module's pure functions, for checking ----------------
 const std::uint32_t kTable[8] = {0x9E3779B1u, 0x85EBCA77u, 0xC2B2AE3Du, 0x27D4EB2Fu,
