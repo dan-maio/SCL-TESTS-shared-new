@@ -7,6 +7,7 @@
  * TEST_GROUP 4 loads libcppeh, ehx_catch, libcppsh: C++ exceptions, RTTI and virtuals.
  * TEST_GROUP 5 loads mylib1 and slib, and calls them from a timer interrupt on each core
  * while threads run inside the same modules.
+ * TEST_GROUP 6 loads the RP2350 libled, libuart and libspi, which drive real peripherals.
  * TEST_EH_THROW really throws; other loaders register no unwind tables, so they make
  * only the non-throwing calls, as the WeAct dynamic-newlib test does.
  *
@@ -335,6 +336,9 @@ struct Fixtures {
 #if TEST_GROUP == 1
     Fn cpp3_method, cpp3_recurse, cpp3_float_cross, cpp3_heap, c2_add, c2_param, c2_state,
         c1_call_c2, c1_use_fm, c1_state, library_function, retstr;
+#elif TEST_GROUP == 6
+    Fn led_init, led_blink, led_is_on, led_count, led_discard, uart_init, uart_puts, uart_chars,
+        uart_discard, spi_init, spi_selftest, spi_transfers, spi_discard;
 #elif TEST_GROUP == 5
     Fn library_function, my_systick_handler, s_add, s_scale, s_via_helper, s_apply, s_use_host, s_get_a, s_get_b,
         s_print, s_text;
@@ -371,6 +375,9 @@ constexpr std::size_t kStageEach = 32 * 1024;
 #if TEST_GROUP == 1
 constexpr int kCount = 4, kSetCount = 3;
 const char* const kNames[kCount] = {"cpp3", "c2", "c1", "mylib1"};
+#elif TEST_GROUP == 6
+constexpr int kCount = 3, kSetCount = 2;
+const char* const kNames[kCount] = {"libled", "libuart", "libspi"};
 #elif TEST_GROUP == 5
 constexpr int kCount = 2, kSetCount = 1;
 const char* const kNames[kCount] = {"mylib1", "slib"};
@@ -491,6 +498,11 @@ bool load_fixtures() {
     GET(cpp3_heap, cluster); GET(c2_add, cluster); GET(c2_param, cluster); GET(c2_state, cluster);
     GET(c1_call_c2, cluster); GET(c1_use_fm, cluster); GET(c1_state, cluster);
     GET(library_function, m1); GET(retstr, m1);
+#elif TEST_GROUP == 6
+    GET(led_init, cluster); GET(led_blink, cluster); GET(led_is_on, cluster); GET(led_count, cluster);
+    GET(led_discard, cluster); GET(uart_init, cluster); GET(uart_puts, cluster); GET(uart_chars, cluster);
+    GET(uart_discard, cluster); GET(spi_init, m1); GET(spi_selftest, m1); GET(spi_transfers, m1);
+    GET(spi_discard, m1);
 #elif TEST_GROUP == 5
     GET(library_function, cluster); GET(my_systick_handler, cluster);
     GET(s_add, m1); GET(s_scale, m1); GET(s_via_helper, m1); GET(s_apply, m1); GET(s_use_host, m1);
@@ -524,6 +536,10 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 6
+    GET(led_init, 0); GET(led_blink, 0); GET(led_is_on, 0); GET(led_count, 0); GET(led_discard, 0);
+    GET(uart_init, 1); GET(uart_puts, 1); GET(uart_chars, 1); GET(uart_discard, 1);
+    GET(spi_init, 2); GET(spi_selftest, 2); GET(spi_transfers, 2); GET(spi_discard, 2);
 #elif TEST_GROUP == 5
     GET(library_function, 0); GET(my_systick_handler, 0);
     GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
@@ -557,6 +573,10 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 6
+    GET(led_init, 0); GET(led_blink, 0); GET(led_is_on, 0); GET(led_count, 0); GET(led_discard, 0);
+    GET(uart_init, 1); GET(uart_puts, 1); GET(uart_chars, 1); GET(uart_discard, 1);
+    GET(spi_init, 2); GET(spi_selftest, 2); GET(spi_transfers, 2); GET(spi_discard, 2);
 #elif TEST_GROUP == 5
     GET(library_function, 0); GET(my_systick_handler, 0);
     GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
@@ -590,6 +610,10 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 6
+    GET(led_init, 0); GET(led_blink, 0); GET(led_is_on, 0); GET(led_count, 0); GET(led_discard, 0);
+    GET(uart_init, 1); GET(uart_puts, 1); GET(uart_chars, 1); GET(uart_discard, 1);
+    GET(spi_init, 2); GET(spi_selftest, 2); GET(spi_transfers, 2); GET(spi_discard, 2);
 #elif TEST_GROUP == 5
     GET(library_function, 0); GET(my_systick_handler, 0);
     GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
@@ -615,7 +639,11 @@ bool load_fixtures() {
         }
     }
 #define GET(field, i) ok = ok && set(g_fx.field, h[i].sym<fn2>(#field), 0, "missing " #field)
-#if TEST_GROUP == 5
+#if TEST_GROUP == 6
+    GET(led_init, 0); GET(led_blink, 0); GET(led_is_on, 0); GET(led_count, 0); GET(led_discard, 0);
+    GET(uart_init, 1); GET(uart_puts, 1); GET(uart_chars, 1); GET(uart_discard, 1);
+    GET(spi_init, 2); GET(spi_selftest, 2); GET(spi_transfers, 2); GET(spi_discard, 2);
+#elif TEST_GROUP == 5
     GET(library_function, 0); GET(my_systick_handler, 0);
     GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
     GET(s_get_a, 1); GET(s_get_b, 1); GET(s_print, 1); GET(s_text, 1);
@@ -656,6 +684,10 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 6
+    GET(led_init, 0); GET(led_blink, 0); GET(led_is_on, 0); GET(led_count, 0); GET(led_discard, 0);
+    GET(uart_init, 1); GET(uart_puts, 1); GET(uart_chars, 1); GET(uart_discard, 1);
+    GET(spi_init, 2); GET(spi_selftest, 2); GET(spi_transfers, 2); GET(spi_discard, 2);
 #elif TEST_GROUP == 5
     GET(library_function, 0); GET(my_systick_handler, 0);
     GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
@@ -711,6 +743,9 @@ void boot_load() {
 #if TEST_GROUP == 1
     g_text_addr = reinterpret_cast<u32>(g_fx.cpp3_method.f);
     g_data_got = g_fx.cpp3_method.got;
+#elif TEST_GROUP == 6
+    g_text_addr = reinterpret_cast<u32>(g_fx.spi_selftest.f);
+    g_data_got = g_fx.spi_selftest.got;
 #elif TEST_GROUP == 5
     g_text_addr = reinterpret_cast<u32>(g_fx.s_add.f);
     g_data_got = g_fx.s_add.got;
@@ -734,6 +769,11 @@ void boot_load() {
     }
     g_hits_base = call(g_fx.c2_state);
     g_c1_base = call(g_fx.c1_state);
+#elif TEST_GROUP == 6
+    call(g_fx.led_init);
+    call(g_fx.uart_init);
+    call(g_fx.spi_init);
+    if (call(g_fx.spi_selftest, 0xA5, 64) != 0u) { g_boot_error = "SPI loopback"; return; }
 #elif TEST_GROUP == 5
     if (call(g_fx.s_get_a) != 15u || call(g_fx.s_get_b) != 30u) { g_boot_error = "slib constructor"; return; }
 #elif TEST_GROUP == 4
@@ -864,6 +904,16 @@ void walkthrough(unsigned core) {
     say("\"\n");
     show("c2_state()", call(g_fx.c2_state));
     show("c1_state()", call(g_fx.c1_state));
+#elif TEST_GROUP == 6
+    show("led_blink(3) [watch the LED], total blinks", call(g_fx.led_blink, 3, 400000));
+    show("led_is_on()", call(g_fx.led_is_on));
+    {
+        char l[64];
+        std::snprintf(l, sizeof l, "  [libuart] hello from core %u, on the UART only\r\n", core);
+        show("uart_puts(...), chars sent", call(g_fx.uart_puts, reinterpret_cast<u32>(l)));
+    }
+    show("spi_selftest(0x5A, 32) [loopback], mismatches", call(g_fx.spi_selftest, 0x5A, 32));
+    show("spi_transfers()", call(g_fx.spi_transfers));
 #elif TEST_GROUP == 5
     show("s_add(1,2)", call(g_fx.s_add, 1, 2));
     show("s_scale(2)", call(g_fx.s_scale, 2));
@@ -972,6 +1022,15 @@ void* worker(void* arg) {
         expect(cross == 10u + 0x2200u, 7);
         expect(deep == 10u, 8);
 
+#elif TEST_GROUP == 6
+        // One SPI block and one LED: both are shared, so main's lock serialises them.
+        app_lock();
+        const u32 bad = call(g_fx.spi_selftest, i, 16);
+        call(g_fx.led_blink, 1, 0);
+        const u32 on = call(g_fx.led_is_on);
+        app_unlock();
+        expect(bad == 0u, 1);
+        expect(on == 0u, 2);
 #elif TEST_GROUP == 5
         // Interrupted by the timer ISR, which enters the same modules with its own r10.
         expect(call(g_fx.s_add, i, 2) == i + 2u + 15u, 1);
@@ -1148,6 +1207,18 @@ int os_main(int, char*[]) {
     check(hits == kHitsPerIter * total, "c2 counted every locked call");
     check(c1 == total, "c1 counted every locked call");
 #endif
+#if TEST_GROUP == 6
+    {
+        const u32 blinks = call(g_fx.led_count), xfers = call(g_fx.spi_transfers), chars = call(g_fx.uart_chars);
+        sayf("  blinks=%u spi bytes=%u uart chars=%u\n", blinks, xfers, chars);
+        check(blinks == kWorkers * kIters + 6u, "every LED blink was counted");
+        check(xfers == kWorkers * kIters * 16u + 64u + 64u, "every SPI byte was transferred");
+        check(chars > 0u, "libuart wrote to the UART");
+        call(g_fx.spi_discard);
+        call(g_fx.led_discard);
+        call(g_fx.uart_discard);
+    }
+#endif
 #if TEST_GROUP == 5
     check(hits0 >= 100u && hits1 >= 100u, "the timer interrupt ran on both cores");
     check(g_irq_errors == 0u, "fixtures returned correct values inside the interrupts");
@@ -1156,7 +1227,9 @@ int os_main(int, char*[]) {
     check(g_workers[0].cores_seen == 1u && g_workers[1].cores_seen == 2u, "pinned workers stayed on their core");
     check(boot_locks > 0, "the load took the loader lock");
     check(g_cleans > 0 && g_invalidates > 0, "the loader made its cache calls");
-#if defined(TEST_CROSS_CALL_LOOKUP) && !(TEST_GROUP == 5 && defined(TEST_XIP_STATIC))
+/* Lookups only happen where a fixture imports: group 6 imports nothing, and in group 5
+ * xip::stat has bound main's imports at provision time. */
+#if defined(TEST_CROSS_CALL_LOOKUP) && TEST_GROUP != 6 && !(TEST_GROUP == 5 && defined(TEST_XIP_STATIC))
     check(g_locks_after_publish > 0, "cross-module calls used the call-time lookup");
 #else
     check(g_locks_after_publish == 0, "no loader code ran after publication");

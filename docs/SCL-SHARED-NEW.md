@@ -98,15 +98,13 @@ git commit -m "bump SCL-shared-new"
 
 ## Pi-Zero RP2350B validation
 
-`pico2-pizero-shared/` runs 66 tests under the µOS++ SMP kernel, all passing in one run at
-`380161e`: every loader, on the shared fixtures, with C++ exceptions and an interrupt on each
+`pico2-pizero-shared/` runs 77 tests under the µOS++ SMP kernel, all passing in one run at
+`9f1320f`: every loader, on the shared fixtures, with C++ exceptions and an interrupt on each
 core. It found most of the loader fixes since `ab7737d`. The suite's README lists them.
 
 ## Next steps
 
-- Re-run `pico2-pizero-shared/` at `b05616a`.
+- Re-run the WeAct tests and examples at `9f1320f`.
 - NUCLEO-F411RE hardware validation (the suites support `SCL_BOARD=nucleo`).
 - Cache overrides on a Cortex-M7. `pico2-pizero-shared/` covers SMP and the RP2350's XIP
   cache.
-- RP2350 versions of the driver fixtures (`libspi`, `libled`, `libuart`).
-- Real C++ throws on `scl::dynamic-newlib`, `scl::static`, `scl::reloc` and `scl::optimal`.

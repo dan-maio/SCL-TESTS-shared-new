@@ -36,6 +36,9 @@ TESTS=(scl-smp-reloc-sram scl-smp-reloc-psram scl-smp-nolib-sram scl-smp-nolib-p
        scl-fix5-reloc-sram scl-fix5-reloc-psram scl-fix5-nolib-sram scl-fix5-nolib-psram
        scl-fix5-newlib-sram scl-fix5-static-sram scl-fix5-static-psram scl-fix5-optimal-sram
        scl-fix5-xip-flash scl-fix5-xipstatic-flash scl-fix5-xipnolib-flash
+       scl-fix6-reloc-sram scl-fix6-reloc-psram scl-fix6-nolib-sram scl-fix6-nolib-psram
+       scl-fix6-newlib-sram scl-fix6-static-sram scl-fix6-static-psram scl-fix6-optimal-sram
+       scl-fix6-xip-flash scl-fix6-xipstatic-flash scl-fix6-xipnolib-flash
        scl-neg-reloc scl-neg-nolib scl-neg-newlib scl-neg-static
        scl-neg-optimal scl-neg-xip scl-neg-xipstatic scl-neg-xipnolib)
 pass=0; fail=0; first=1

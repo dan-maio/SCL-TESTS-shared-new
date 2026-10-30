@@ -230,6 +230,46 @@ foreach(pair "libcppeh|libcppeh/src/cppeh.cpp" "ehx_catch|ehx/ehx-catch.cpp"
     endforeach()
     math(EXPR slot "${slot} + 1")
 endforeach()
+# The RP2350 driver fixtures: the same forms, from this suite's own sources.
+set(slot 0)
+foreach(pair "libled|led" "libuart|uart" "libspi|spi")
+    string(REPLACE "|" ";" p "${pair}")
+    list(GET p 0 n)
+    list(GET p 1 s)
+    set(src "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/rp2350/${s}.c")
+    set(C_OPTS -std=gnu11 -ffreestanding -fno-common)
+    add_custom_command(OUTPUT "${FIX_DIR}/${n}.rel.o"
+        COMMAND ${CMAKE_C_COMPILER} ${MCU} -mlong-calls -fno-pic -Os ${C_OPTS} -c "${src}" -o "${FIX_DIR}/${n}.tmp.o"
+        COMMAND ${CMAKE_LINKER} -r "${FIX_DIR}/${n}.tmp.o" -o "${FIX_DIR}/${n}.rel.o"
+        DEPENDS "${src}" VERBATIM)
+    add_custom_command(OUTPUT "${FIX_DIR}/${n}.so"
+        COMMAND ${CMAKE_C_COMPILER} ${MCU} -fpic -msingle-pic-base -mpic-register=r10
+                -mno-pic-data-is-text-relative -O0 ${C_OPTS} -shared -nostartfiles -nostdlib -nodefaultlibs
+                -Wl,-E -Wl,-Bsymbolic
+                -T "${CMAKE_CURRENT_SOURCE_DIR}/../dynamic-shared/test-xip/fixtures-src/ldscripts/xip-split.ld"
+                "${src}" -o "${FIX_DIR}/${n}.so"
+        DEPENDS "${src}" VERBATIM)
+    add_custom_command(OUTPUT "${FIX_DIR}/${n}.pic.so"
+        COMMAND ${CMAKE_C_COMPILER} ${MCU} -fPIC -O0 ${C_OPTS} -shared -nostartfiles -nostdlib -nodefaultlibs
+                -Wl,-E "${src}" -o "${FIX_DIR}/${n}.pic.so"
+        DEPENDS "${src}" VERBATIM)
+    list(APPEND FIX_FILES "${FIX_DIR}/${n}.rel.o" "${FIX_DIR}/${n}.so" "${FIX_DIR}/${n}.pic.so")
+    foreach(mem IN ITEMS sram psram)
+        math(EXPR tb "${WIN_${mem}_TEXT} + ${slot} * 0x1000" OUTPUT_FORMAT HEXADECIMAL)
+        math(EXPR db "${WIN_${mem}_DATA} + ${slot} * 0x1000" OUTPUT_FORMAT HEXADECIMAL)
+        set(out "${FIX_DIR}/${n}.opt-${mem}.so")
+        add_custom_command(OUTPUT "${out}"
+            COMMAND sed -e "s/__TEXT_BASE__/${tb}/g" -e "s/__DATA_BASE__/${db}/g"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../optimal-shared/fixtures-src/ldscripts/nopic-split.ld"
+                    > "${out}.ld"
+            COMMAND ${CMAKE_C_COMPILER} ${MCU} -fno-pic -mlong-calls -O0 ${C_OPTS} -shared -nostartfiles -nostdlib
+                    -nodefaultlibs -Wl,-E -Wl,-z,max-page-size=0x100 -Wl,--unresolved-symbols=ignore-all
+                    -T "${out}.ld" "${src}" -o "${out}"
+            DEPENDS "${src}")
+        list(APPEND FIX_FILES "${out}")
+    endforeach()
+    math(EXPR slot "${slot} + 1")
+endforeach()
 add_custom_target(scl-fix-modules DEPENDS ${FIX_FILES})
 
 # Exceptions need main's unwind table sorted, and ld only sorts it as its own output
@@ -272,6 +312,9 @@ function(scl_fix_test name loader target ext section top psram iters)
     endif()
     if("GROUP5" IN_LIST ARGN)
         set(group 5)
+    endif()
+    if("GROUP6" IN_LIST ARGN)
+        set(group 6)
     endif()
     if("HIDE_HOST_F" IN_LIST ARGN)
         list(APPEND defs TEST_HIDE_HOST_F TEST_EXPECT_MISSING="host_f")
@@ -370,10 +413,10 @@ scl_fix_test(scl-fix4-nolib-psram     LOADER_NOLIB scl::dynamic-nolib       .so 
 scl_fix_test(scl-fix4-xip-flash       LOADER_XIP   scl::xip-dynamic-newlib  .so .bss.scl_arena   0x10 OFF  200 GROUP4 THROW)
 scl_fix_test(scl-fix4-xipstatic-flash LOADER_XIP   scl::xip-static          .so .bss.scl_arena   0x10 OFF  200 GROUP4 THROW)
 scl_fix_test(scl-fix4-xipnolib-flash  LOADER_XIP   scl::xip-dynamic-nolib   .so .bss.scl_arena   0x10 OFF  200 GROUP4 THROW)
-scl_fix_test(scl-fix4-newlib-sram     LOADER_NEWLIB scl::dynamic-newlib     .pic.so .bss.scl_arena 0x20 OFF 500 GROUP4)
-scl_fix_test(scl-fix4-static-sram     LOADER_STATIC scl::static             .pic.so .bss.scl_arena 0x20 OFF 500 GROUP4)
-scl_fix_test(scl-fix4-reloc-sram      LOADER_RELOC scl::reloc               .rel.o .bss.scl_arena  0x20 OFF 500 GROUP4)
-scl_fix_test(scl-fix4-optimal-sram    LOADER_OPTIMAL scl::optimal           .opt-sram.so .bss.scl_arena 0x20 OFF 500 GROUP4)
+scl_fix_test(scl-fix4-newlib-sram     LOADER_NEWLIB scl::dynamic-newlib     .pic.so .bss.scl_arena 0x20 OFF 500 GROUP4 THROW)
+scl_fix_test(scl-fix4-static-sram     LOADER_STATIC scl::static             .pic.so .bss.scl_arena 0x20 OFF 500 GROUP4 THROW)
+scl_fix_test(scl-fix4-reloc-sram      LOADER_RELOC scl::reloc               .rel.o .bss.scl_arena  0x20 OFF 500 GROUP4 THROW)
+scl_fix_test(scl-fix4-optimal-sram    LOADER_OPTIMAL scl::optimal           .opt-sram.so .bss.scl_arena 0x20 OFF 500 GROUP4 THROW)
 scl_fix_test(scl-fix5-reloc-sram      LOADER_RELOC scl::reloc               .rel.o .bss.scl_arena    0x20 OFF 30000 GROUP5)
 scl_fix_test(scl-fix5-reloc-psram     LOADER_RELOC scl::reloc               .rel.o .psram.scl_arena  0x11 ON  10000 GROUP5)
 scl_fix_test(scl-fix5-nolib-sram      LOADER_NOLIB scl::dynamic-nolib       .so .bss.scl_arena       0x20 OFF 20000 GROUP5)
@@ -385,6 +428,18 @@ scl_fix_test(scl-fix5-optimal-sram    LOADER_OPTIMAL scl::optimal           .opt
 scl_fix_test(scl-fix5-xip-flash       LOADER_XIP   scl::xip-dynamic-newlib  .so .bss.scl_arena       0x10 OFF 5000  GROUP5)
 scl_fix_test(scl-fix5-xipstatic-flash LOADER_XIP   scl::xip-static          .so .bss.scl_arena       0x10 OFF 5000  GROUP5)
 scl_fix_test(scl-fix5-xipnolib-flash  LOADER_XIP   scl::xip-dynamic-nolib   .so .bss.scl_arena       0x10 OFF 5000  GROUP5)
+scl_fix_test(scl-fix6-reloc-sram      LOADER_RELOC scl::reloc               .rel.o .bss.scl_arena    0x20 OFF 2000 GROUP6)
+scl_fix_test(scl-fix6-reloc-psram     LOADER_RELOC scl::reloc               .rel.o .psram.scl_arena  0x11 ON  500  GROUP6)
+scl_fix_test(scl-fix6-nolib-sram      LOADER_NOLIB scl::dynamic-nolib       .so .bss.scl_arena       0x20 OFF 2000 GROUP6)
+scl_fix_test(scl-fix6-nolib-psram     LOADER_NOLIB scl::dynamic-nolib       .so .psram.scl_arena     0x11 ON  500  GROUP6)
+scl_fix_test(scl-fix6-newlib-sram     LOADER_NEWLIB scl::dynamic-newlib     .pic.so .bss.scl_arena   0x20 OFF 2000 GROUP6)
+scl_fix_test(scl-fix6-static-sram     LOADER_STATIC scl::static             .pic.so .bss.scl_arena   0x20 OFF 2000 GROUP6)
+scl_fix_test(scl-fix6-static-psram    LOADER_STATIC scl::static             .pic.so .psram.scl_arena 0x11 ON  500  GROUP6)
+scl_fix_test(scl-fix6-optimal-sram    LOADER_OPTIMAL scl::optimal           .opt-sram.so .bss.scl_arena 0x20 OFF 2000 GROUP6)
+scl_fix_test(scl-fix6-xip-flash       LOADER_XIP   scl::xip-dynamic-newlib  .so .bss.scl_arena       0x10 OFF 500  GROUP6)
+scl_fix_test(scl-fix6-xipstatic-flash LOADER_XIP   scl::xip-static          .so .bss.scl_arena       0x10 OFF 500  GROUP6)
+scl_fix_test(scl-fix6-xipnolib-flash  LOADER_XIP   scl::xip-dynamic-nolib   .so .bss.scl_arena       0x10 OFF 500  GROUP6)
+
 # Negative tests: main's table hides host_f, and it must be reported by name.
 scl_fix_test(scl-neg-reloc     LOADER_RELOC scl::reloc              .rel.o .bss.scl_arena 0x20 OFF 1 GROUP5 HIDE_HOST_F)
 scl_fix_test(scl-neg-nolib     LOADER_NOLIB scl::dynamic-nolib      .so .bss.scl_arena    0x20 OFF 1 GROUP5 HIDE_HOST_F)

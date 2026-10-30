@@ -168,11 +168,11 @@ and both cores just call the modules.
 
 | Loader | Code can run from | Loader code at call time | Real C++ throws |
 |---|---|---|---|
-| `scl::reloc` | SRAM, PSRAM | none | not supported |
-| `scl::static` | SRAM, PSRAM | none | not supported |
-| `scl::optimal` | SRAM, PSRAM | none | not supported |
+| `scl::reloc` | SRAM, PSRAM | none | yes |
+| `scl::static` | SRAM, PSRAM | none | yes |
+| `scl::optimal` | SRAM, PSRAM | none | yes |
 | `scl::overlay` | SRAM, PSRAM | none; swap only at boot | not tested |
-| `scl::dynamic-newlib` | SRAM (heap) | none | not supported |
+| `scl::dynamic-newlib` | SRAM (heap) | none | yes |
 | `scl::dynamic-nolib` | SRAM, PSRAM | every call into main or another module | yes |
 | `scl::xip-dynamic-newlib` | flash | every call into main or another module | yes |
 | `scl::xip-dynamic-nolib` | flash | every call into main or another module | yes |

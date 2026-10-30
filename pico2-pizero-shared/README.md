@@ -96,10 +96,13 @@ and virtual classes.
 | Tests | Loader | Throws for real |
 |---|---|---|
 | `scl-fix4-nolib-sram`, `scl-fix4-nolib-psram` | `scl::dynamic-nolib` | yes |
+| `scl-fix4-newlib-sram` | `scl::dynamic-newlib` | yes |
+| `scl-fix4-static-sram` | `scl::static` | yes |
+| `scl-fix4-reloc-sram` | `scl::reloc` | yes |
+| `scl-fix4-optimal-sram` | `scl::optimal` | yes |
 | `scl-fix4-xip-flash` | `scl::xip-dynamic-newlib` | yes |
 | `scl-fix4-xipstatic-flash` | `scl::xip-static` | yes |
 | `scl-fix4-xipnolib-flash` | `scl::xip-dynamic-nolib` | yes |
-| `scl-fix4-newlib-sram`, `scl-fix4-static-sram`, `scl-fix4-reloc-sram`, `scl-fix4-optimal-sram` | the others | no: they register no unwind tables, so only `eh_dyncast`, `ehx_catch_cross(0)` and `cppsh_*` run |
 
 The throwing tests throw and catch inside `libcppeh`, throw in `libcppeh` and catch in
 `ehx_catch` through the cross-call trampoline, and throw in `libcppeh` and catch in main.
@@ -114,6 +117,10 @@ each core points `VTOR` at a patched RAM copy, as the WeAct test does.
 Every fixture test also calls its loader's `first_missing_import()` at boot, and fails if
 any import has no provider. The eight `scl-neg-*` tests hide `host_f` from main's table: it
 must be reported by name, and `scl::reloc` must refuse the load.
+
+The `scl-fix6-*` tests load this suite's `fixtures/rp2350/` versions of `libled`, `libuart` and
+`libspi`, which drive the real peripherals. This board has no W25Q64, so `libspi` uses SPI0's
+internal loopback, which needs no wiring. It tests the SPI peripheral, not a flash chip.
 
 Each fixture test first prints every fixture call with its traces, on core 0 and then
 on core 1, like the WeAct apps. Traces are off for the stress loop that follows.
@@ -137,10 +144,8 @@ results there.
 
 ## Status
 
-One full run of all 66 tests passed on the board (2026-10-30), against SCL-shared-new
-`380161e`. `b05616a` then fixed a double-applied addend found on the WeAct board, in
-`scl::static`. This suite has not run at that commit; its `scl-fix3-*`, `scl-fix4-static-sram`,
-`scl-fix5-static-*` and `scl-neg-static` tests are the ones to re-run.
+One full run of all 77 tests passed on the board (2026-10-30), with the loader now committed as SCL-shared-new
+`9f1320f`. That loader has not yet run on the WeAct board.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.
 
@@ -175,7 +180,11 @@ between tests.
   vptr was 8 bytes off (applied once only since `b05616a`, because `patch_shlib()` can run twice). `R_ARM_REL32` was overwritten with an absolute address. Exports
   with no relocation in their own library were never published.
 - **`scl::reloc` rejected exception-enabled objects.** It now accepts `R_ARM_PREL31`,
-  `R_ARM_TARGET2` and `R_ARM_NONE`. It still registers no unwind tables.
+  `R_ARM_TARGET2` and `R_ARM_NONE`, and builds one sorted unwind table at load, because a
+  partial link leaves many unsorted ones.
+- **`R_ARM_REL32` was wrong in `scl::static`, `scl::dynamic-newlib` and `scl::optimal`.** It
+  needs `S + A - P`. These loaders now also register unwind tables.
+- **`scl::optimal` added a word's value to `R_ARM_JUMP_SLOT`,** which holds a PLT stub address.
 - **`scl::xip-static` and `scl::xip-dynamic-nolib` needed a PIE main.** Both now take
   `set_symtab()`. `xip::stat` binds main's imports into the image at provision time, so
   only calls between modules do a lookup: 48000 lock acquisitions against 264000 for
@@ -201,8 +210,8 @@ between tests.
 ## Not tested
 
 - Loading or unloading after SMP has started, which this design excludes.
-- The STM32 driver fixtures (`libspi`, `libled`, `libuart`).
-- Real throws under `scl::dynamic-newlib`, `scl::static`, `scl::reloc` and `scl::optimal`.
+- The original STM32 driver fixtures, and any external SPI device.
+- Real throws from PSRAM under `scl::dynamic-newlib`, `scl::static`, `scl::reloc` and `scl::optimal`.
 - Exceptions thrown on both cores at the same moment.
 - Fixture functions that write their own state without a lock, on two cores at once.
 - Module code that blocks or creates threads, or runs in an ISR.

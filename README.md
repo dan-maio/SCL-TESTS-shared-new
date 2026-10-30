@@ -45,9 +45,10 @@ confirms the host tools and the new loader sources work together.
 | Board | Suite | Tests | Result (2026-10-30) | Loader |
 |---|---|---|---|---|
 | WeAct F411CE + W25Q64 | suites + `api-shared/` | 22 | all pass | `380161e`, 5 re-run at `b05616a` |
-| Pi-Zero RP2350B + PSRAM | `pico2-pizero-shared/` | 66 | all pass, in one run | `380161e` |
+| Pi-Zero RP2350B + PSRAM | `pico2-pizero-shared/` | 77 | all pass, in one run | `9f1320f` |
 
-The Pi-Zero has not run since `b05616a`, which changed `scl::static` addend handling.
+The WeAct board has not run since `9f1320f`, which changed `scl::static`, `scl::reloc`,
+`scl::optimal` and `scl::dynamic-newlib`. The Pi-Zero's 77 tests pass at that commit.
 The NUCLEO board has not been validated.
 
 ## WeAct F411CE status (verified)
@@ -80,8 +81,8 @@ was skipping, leaving their imports unpatched.
 
 ## Pi-Zero RP2350B status (verified)
 
-All 66 SMP loader tests, 58 of them using the shared fixtures, passed on the board in one
-full run at `380161e`. They cover every loader, in SRAM, PSRAM and flash as each allows, C++
+All 77 SMP loader tests, 69 of them using the shared fixtures, passed on the board in one
+full run. They cover every loader, in SRAM, PSRAM and flash as each allows, C++
 exceptions, per-core interrupts and missing-import reporting. See
 `pico2-pizero-shared/README.md`, and `docs/LOADER-CHOICE.md` for what it means when choosing.
 
