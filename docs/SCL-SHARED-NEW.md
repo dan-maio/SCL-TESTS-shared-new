@@ -101,7 +101,7 @@ git commit -m "bump SCL-shared-new"
 `9f1320f`: every loader, on the shared fixtures, with C++ exceptions and an interrupt on each
 core. It found most of the loader fixes since `ab7737d`. The suite's README lists them.
 `SCL-EXAMPLES-shared-new/pizero/` has the WeAct examples and these fixtures on every loader on
-this board, and writing flash with both cores running; all 76 firmwares pass at `9f1320f`.
+this board, and writing flash with both cores running. Its README has their status.
 
 ## Next steps
 
