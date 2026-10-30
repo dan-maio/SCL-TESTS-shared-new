@@ -32,7 +32,10 @@ TESTS=(scl-smp-reloc-sram scl-smp-reloc-psram scl-smp-nolib-sram scl-smp-nolib-p
        scl-fix-xipstatic-flash scl-fix-xipstatic-flash-psram scl-fix2-xipstatic-flash scl-fix2-xipstatic-flash-psram
        scl-fix-xipnolib-flash scl-fix-xipnolib-flash-psram scl-fix2-xipnolib-flash scl-fix2-xipnolib-flash-psram
        scl-fix4-nolib-sram scl-fix4-nolib-psram scl-fix4-xip-flash scl-fix4-xipstatic-flash scl-fix4-xipnolib-flash
-       scl-fix4-newlib-sram scl-fix4-static-sram scl-fix4-reloc-sram scl-fix4-optimal-sram)
+       scl-fix4-newlib-sram scl-fix4-static-sram scl-fix4-reloc-sram scl-fix4-optimal-sram
+       scl-fix5-reloc-sram scl-fix5-reloc-psram scl-fix5-nolib-sram scl-fix5-nolib-psram
+       scl-fix5-newlib-sram scl-fix5-static-sram scl-fix5-static-psram scl-fix5-optimal-sram
+       scl-fix5-xip-flash scl-fix5-xipstatic-flash scl-fix5-xipnolib-flash)
 pass=0; fail=0; first=1
 declare -a RESULTS=()
 export PATH="${ARM_TOOLCHAIN_BIN:-/home/dan/.local/xPacks/@xpack-dev-tools/arm-none-eabi-gcc/15.2.1-1.1.1/.content/bin}:$PATH"

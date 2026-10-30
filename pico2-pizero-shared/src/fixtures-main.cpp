@@ -5,6 +5,8 @@
  * TEST_GROUP 1 loads cpp3, c2, c1, mylib1. TEST_GROUP 2 loads libprov, libcons, mylib2.
  * TEST_GROUP 3 adds mylib1 to group 2, for scl::static, which has no cyclic imports.
  * TEST_GROUP 4 loads libcppeh, ehx_catch, libcppsh: C++ exceptions, RTTI and virtuals.
+ * TEST_GROUP 5 loads mylib1 and slib, and calls them from a timer interrupt on each core
+ * while threads run inside the same modules.
  * TEST_EH_THROW really throws; other loaders register no unwind tables, so they make
  * only the non-throwing calls, as the WeAct dynamic-newlib test does.
  *
@@ -189,6 +191,8 @@ u32 fm_var = 123;
 struct FmInfo { u32 id, flags; };
 FmInfo fm_info = {0x00F1, 0x0007};
 unsigned AA = 1000, BB = 2000;
+unsigned HOST_K = 1000;
+unsigned host_f(unsigned x) { return x * 2 + 1; }
 char* s1 = const_cast<char*>("main-s1");
 unsigned f(unsigned x) { return x + 10; }
 unsigned w(unsigned x) { return x + 20; }
@@ -303,7 +307,7 @@ const scl_sym_entry kMainSyms[] = {
     SYM("logf", static_cast<float (*)(float)>(&logf)), SYM("sqrtf", static_cast<float (*)(float)>(&sqrtf)),
     SYM("malloc", &locked_malloc), SYM("free", &locked_free), SYM("_Znwj", &locked_new),
     SYM("_ZdlPv", &locked_delete), SYM("_ZdlPvj", &locked_delete2),
-    SYM("AA", &AA), SYM("BB", &BB), SYM("s1", &s1), SYM("f", &f), SYM("w", &w),
+    SYM("HOST_K", &HOST_K), SYM("host_f", &host_f), SYM("AA", &AA), SYM("BB", &BB), SYM("s1", &s1), SYM("f", &f), SYM("w", &w),
     SYM("printf", &fixture_printf), SYM("puts", &fixture_puts), SYM("strcat", &strcat), SYM("strlen", &strlen),
     SYM("log", &fixture_log), SYM("__aeabi_d2f", &__aeabi_d2f), SYM("__aeabi_f2d", &__aeabi_f2d),
 #if TEST_GROUP == 4
@@ -327,6 +331,9 @@ struct Fixtures {
 #if TEST_GROUP == 1
     Fn cpp3_method, cpp3_recurse, cpp3_float_cross, cpp3_heap, c2_add, c2_param, c2_state,
         c1_call_c2, c1_use_fm, c1_state, library_function, retstr;
+#elif TEST_GROUP == 5
+    Fn library_function, my_systick_handler, s_add, s_scale, s_via_helper, s_apply, s_use_host, s_get_a, s_get_b,
+        s_print, s_text;
 #elif TEST_GROUP == 4
     Fn eh_selftest, eh_throw, eh_dyncast, ehx_catch_cross, cppsh_make, cppsh_compute, cppsh_instances, cppsh_free;
 #else
@@ -359,6 +366,9 @@ constexpr std::size_t kStageEach = 32 * 1024;
 #if TEST_GROUP == 1
 constexpr int kCount = 4, kSetCount = 3;
 const char* const kNames[kCount] = {"cpp3", "c2", "c1", "mylib1"};
+#elif TEST_GROUP == 5
+constexpr int kCount = 2, kSetCount = 1;
+const char* const kNames[kCount] = {"mylib1", "slib"};
 #elif TEST_GROUP == 4
 constexpr int kCount = 3, kSetCount = 2;
 const char* const kNames[kCount] = {"libcppeh", "ehx_catch", "libcppsh"};
@@ -476,6 +486,10 @@ bool load_fixtures() {
     GET(cpp3_heap, cluster); GET(c2_add, cluster); GET(c2_param, cluster); GET(c2_state, cluster);
     GET(c1_call_c2, cluster); GET(c1_use_fm, cluster); GET(c1_state, cluster);
     GET(library_function, m1); GET(retstr, m1);
+#elif TEST_GROUP == 5
+    GET(library_function, cluster); GET(my_systick_handler, cluster);
+    GET(s_add, m1); GET(s_scale, m1); GET(s_via_helper, m1); GET(s_apply, m1); GET(s_use_host, m1);
+    GET(s_get_a, m1); GET(s_get_b, m1); GET(s_print, m1); GET(s_text, m1);
 #elif TEST_GROUP == 4
     GET(eh_selftest, cluster); GET(eh_throw, cluster); GET(eh_dyncast, cluster); GET(ehx_catch_cross, cluster);
     GET(cppsh_make, m1); GET(cppsh_compute, m1); GET(cppsh_instances, m1); GET(cppsh_free, m1);
@@ -505,6 +519,10 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 5
+    GET(library_function, 0); GET(my_systick_handler, 0);
+    GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
+    GET(s_get_a, 1); GET(s_get_b, 1); GET(s_print, 1); GET(s_text, 1);
 #elif TEST_GROUP == 4
     GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
     GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
@@ -533,6 +551,10 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 5
+    GET(library_function, 0); GET(my_systick_handler, 0);
+    GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
+    GET(s_get_a, 1); GET(s_get_b, 1); GET(s_print, 1); GET(s_text, 1);
 #elif TEST_GROUP == 4
     GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
     GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
@@ -561,6 +583,10 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 5
+    GET(library_function, 0); GET(my_systick_handler, 0);
+    GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
+    GET(s_get_a, 1); GET(s_get_b, 1); GET(s_print, 1); GET(s_text, 1);
 #elif TEST_GROUP == 4
     GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
     GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
@@ -581,7 +607,11 @@ bool load_fixtures() {
         }
     }
 #define GET(field, i) ok = ok && set(g_fx.field, h[i].sym<fn2>(#field), 0, "missing " #field)
-#if TEST_GROUP == 4
+#if TEST_GROUP == 5
+    GET(library_function, 0); GET(my_systick_handler, 0);
+    GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
+    GET(s_get_a, 1); GET(s_get_b, 1); GET(s_print, 1); GET(s_text, 1);
+#elif TEST_GROUP == 4
     GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
     GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
 #else
@@ -617,6 +647,10 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 5
+    GET(library_function, 0); GET(my_systick_handler, 0);
+    GET(s_add, 1); GET(s_scale, 1); GET(s_via_helper, 1); GET(s_apply, 1); GET(s_use_host, 1);
+    GET(s_get_a, 1); GET(s_get_b, 1); GET(s_print, 1); GET(s_text, 1);
 #elif TEST_GROUP == 4
     GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
     GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
@@ -658,6 +692,9 @@ void boot_load() {
 #if TEST_GROUP == 1
     g_text_addr = reinterpret_cast<u32>(g_fx.cpp3_method.f);
     g_data_got = g_fx.cpp3_method.got;
+#elif TEST_GROUP == 5
+    g_text_addr = reinterpret_cast<u32>(g_fx.s_add.f);
+    g_data_got = g_fx.s_add.got;
 #elif TEST_GROUP == 4
     g_text_addr = reinterpret_cast<u32>(g_fx.eh_dyncast.f);
     g_data_got = g_fx.eh_dyncast.got;
@@ -678,6 +715,8 @@ void boot_load() {
     }
     g_hits_base = call(g_fx.c2_state);
     g_c1_base = call(g_fx.c1_state);
+#elif TEST_GROUP == 5
+    if (call(g_fx.s_get_a) != 15u || call(g_fx.s_get_b) != 30u) { g_boot_error = "slib constructor"; return; }
 #elif TEST_GROUP == 4
     if (call(g_fx.eh_dyncast) != 2u) { g_boot_error = "eh_dyncast"; return; }
     if (call(g_fx.ehx_catch_cross, 0) != 0u) { g_boot_error = "ehx_catch_cross(0)"; return; }
@@ -711,6 +750,65 @@ extern "C" int __wrap_main(int argc, char** argv) {
     return __real_main(argc, argv);
 }
 namespace {
+
+#if TEST_GROUP == 5
+// ---- TIMER1 alarms, one per core: the kernel owns TIMER0 ----------------------------
+constexpr u32 kTimer1 = 0x400B8000u, kTimelr = kTimer1 + 0x0Cu, kAlarm0 = kTimer1 + 0x10u;
+constexpr u32 kIntr = kTimer1 + 0x3Cu, kInte = kTimer1 + 0x40u;
+constexpr u32 kPeriodUs = 200;
+constexpr unsigned kIrqBase = 4;   // TIMER1_IRQ_0
+inline volatile u32& reg(u32 a) { return *reinterpret_cast<volatile u32*>(a); }
+
+constexpr u32 kVtor = 0xE000ED08u;
+constexpr unsigned kVectors = 16u + 52u;
+alignas(512) u32 g_ram_vectors[kVectors];
+
+volatile unsigned g_irq_stop, g_irq_hits[2], g_irq_errors, g_irq_toggles;
+
+void timer1_irq0();
+void timer1_irq1();
+
+void timer1_init() {
+    constexpr u32 kResetBit = 24u;
+    reg(0x40020000u) &= ~(1u << kResetBit);
+    while (!(reg(0x40020008u) & (1u << kResetBit))) {
+    }
+    reg(0x40108000u + 0x24u + 4u) = 12u;  // TICKS TIMER1_CYCLES: clk_ref 12 MHz -> 1 us
+    reg(0x40108000u + 0x24u) = 1u;
+    reg(kInte) = 3u;
+    /* The board's table has no TIMER1 entries, so patch a RAM copy, as the WeAct test does. */
+    const auto* flash = reinterpret_cast<const u32*>(reg(kVtor));
+    for (unsigned i = 0; i < kVectors; ++i) g_ram_vectors[i] = flash[i];
+    g_ram_vectors[16u + kIrqBase] = reinterpret_cast<u32>(&timer1_irq0);
+    g_ram_vectors[16u + kIrqBase + 1u] = reinterpret_cast<u32>(&timer1_irq1);
+}
+
+void timer1_start_on_this_core() {
+    const unsigned me = port_cpu_id() & 1u;
+    __asm__ volatile("cpsid i" : : : "memory");
+    reg(kVtor) = reinterpret_cast<u32>(g_ram_vectors);   // VTOR is per core
+    __asm__ volatile("dsb\n isb\n cpsie i" : : : "memory");
+    reg(kAlarm0 + me * 4u) = reg(kTimelr) + kPeriodUs;
+    reg(0xE000E100u) = 1u << (kIrqBase + me);
+}
+
+void timer1_isr(unsigned me) {
+    reg(kIntr) = 1u << me;
+    if (g_irq_stop) return;
+    /* Pure calls: nothing shared. They run on top of a thread that may be in a module. */
+    if (call(g_fx.s_apply, 3) != 127u) g_irq_errors = g_irq_errors + 1u;
+    if (call(g_fx.library_function, 39) != 62u) g_irq_errors = g_irq_errors + 1u;
+    /* my_systick_handler counts in the module, with no lock of its own. */
+    app_lock();
+    const u32 toggled = call(g_fx.my_systick_handler, 1);
+    g_irq_toggles = g_irq_toggles + toggled;
+    g_irq_hits[me] = g_irq_hits[me] + 1u;
+    app_unlock();
+    reg(kAlarm0 + me * 4u) = reg(kTimelr) + kPeriodUs;
+}
+void timer1_irq0() { timer1_isr(0); }
+void timer1_irq1() { timer1_isr(1); }
+#endif
 
 constexpr unsigned kWorkers = 4, kIters = TEST_ITERS;
 constexpr u32 kHitsPerIter = 5;  // c2_add 1, float_cross 1, recurse(4) 2, c1_call_c2 1
@@ -747,6 +845,19 @@ void walkthrough(unsigned core) {
     say("\"\n");
     show("c2_state()", call(g_fx.c2_state));
     show("c1_state()", call(g_fx.c1_state));
+#elif TEST_GROUP == 5
+    show("s_add(1,2)", call(g_fx.s_add, 1, 2));
+    show("s_scale(2)", call(g_fx.s_scale, 2));
+    show("s_via_helper(1)", call(g_fx.s_via_helper, 1));
+    show("s_apply(2)", call(g_fx.s_apply, 2));
+    show("s_use_host(1)", call(g_fx.s_use_host, 1));
+    show("s_get_a()", call(g_fx.s_get_a));
+    show("s_get_b()", call(g_fx.s_get_b));
+    say("  s_text() = \"");
+    say(reinterpret_cast<const char*>(call(g_fx.s_text)));
+    say("\"\n");
+    call(g_fx.s_print);
+    show("library_function(39)", call(g_fx.library_function, 39));
 #elif TEST_GROUP == 4
     show("eh_dyncast(0)", call(g_fx.eh_dyncast));
     show("ehx_catch_cross(0)", call(g_fx.ehx_catch_cross, 0));
@@ -813,6 +924,9 @@ void* worker(void* arg) {
         g_walked = w->id + 1;
     }
     while (g_walked < 2) sysclock.sleep_for(5);
+#if TEST_GROUP == 5
+    if (w->id < 2) timer1_start_on_this_core();
+#endif
 
     auto expect = [&](bool ok, unsigned code) {
         if (!ok) { ++w->errors; if (!w->first_bad) w->first_bad = code; }
@@ -839,6 +953,14 @@ void* worker(void* arg) {
         expect(cross == 10u + 0x2200u, 7);
         expect(deep == 10u, 8);
 
+#elif TEST_GROUP == 5
+        // Interrupted by the timer ISR, which enters the same modules with its own r10.
+        expect(call(g_fx.s_add, i, 2) == i + 2u + 15u, 1);
+        expect(call(g_fx.s_scale, i) == i * 42u, 2);
+        expect(call(g_fx.s_via_helper, i) == (i + 100u) + (i + 1u + 15u), 3);
+        expect(call(g_fx.s_apply, i) == i * 42u + 1u, 4);
+        expect(call(g_fx.s_use_host, i) == i * 2u + 1u + 1000u, 5);
+        expect(call(g_fx.library_function, i) == i + 3u + 20u, 6);
 #elif TEST_GROUP == 4
         // Concurrent on both cores: dynamic_cast and the non-throwing path.
         expect(call(g_fx.eh_dyncast) == 2u, 1);
@@ -904,6 +1026,9 @@ void* idle1(void*) {
 
 }  // namespace
 
+#if TEST_GROUP == 5
+#endif
+
 int os_main(int, char*[]) {
     this_thread::thread().cpu_affinity(1u << 0);
     led::init();
@@ -942,6 +1067,9 @@ int os_main(int, char*[]) {
         if (i < 2) threads[i]->cpu_affinity(1u << i);
     }
 
+#if TEST_GROUP == 5
+    timer1_init();
+#endif
     say("  core 0: launching core 1; SMP starts now\n");
     multicore::launch_core1(port_smp_secondary_start, port_core1_stack_top());
     port_smp_core0_ipi_enable();
@@ -953,6 +1081,13 @@ int os_main(int, char*[]) {
         for (auto& w : g_workers) done += w.done;
     }
 
+#if TEST_GROUP == 5
+    g_irq_stop = 1;
+    sysclock.sleep_for(5);
+    const u32 hits0 = g_irq_hits[0], hits1 = g_irq_hits[1];
+    sayf("  interrupts on core0=%u core1=%u; errors in ISR=%u\n", hits0, hits1, g_irq_errors);
+    sayf("  my_systick_handler toggles=%u (expected %u)\n", g_irq_toggles, (hits0 + hits1) / 500u);
+#endif
     unsigned errors = 0, unpublished = 0, first_bad = 0;
     for (auto& w : g_workers) {
         errors += w.errors;
@@ -976,10 +1111,15 @@ int os_main(int, char*[]) {
     check(hits == kHitsPerIter * total, "c2 counted every locked call");
     check(c1 == total, "c1 counted every locked call");
 #endif
+#if TEST_GROUP == 5
+    check(hits0 >= 100u && hits1 >= 100u, "the timer interrupt ran on both cores");
+    check(g_irq_errors == 0u, "fixtures returned correct values inside the interrupts");
+    check(g_irq_toggles == (hits0 + hits1) / 500u, "every locked call from an interrupt was counted");
+#endif
     check(g_workers[0].cores_seen == 1u && g_workers[1].cores_seen == 2u, "pinned workers stayed on their core");
     check(boot_locks > 0, "the load took the loader lock");
     check(g_cleans > 0 && g_invalidates > 0, "the loader made its cache calls");
-#if defined(TEST_CROSS_CALL_LOOKUP)
+#if defined(TEST_CROSS_CALL_LOOKUP) && !(TEST_GROUP == 5 && defined(TEST_XIP_STATIC))
     check(g_locks_after_publish > 0, "cross-module calls used the call-time lookup");
 #else
     check(g_locks_after_publish == 0, "no loader code ran after publication");

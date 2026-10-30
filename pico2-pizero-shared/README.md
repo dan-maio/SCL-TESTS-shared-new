@@ -104,6 +104,13 @@ and virtual classes.
 The throwing tests throw and catch inside `libcppeh`, throw in `libcppeh` and catch in
 `ehx_catch` through the cross-call trampoline, and throw in `libcppeh` and catch in main.
 
+The `scl-fix5-*` tests load `mylib1` and `slib`, and add a `TIMER1` alarm interrupt on each
+core, every 200 us, that enters the modules with its own `r10` while threads run inside
+them. The ISR makes pure calls, and calls `my_systick_handler` under main's lock. They run on
+`reloc`, `dynamic-nolib` and `static` (SRAM and PSRAM), `dynamic-newlib` and `optimal` (SRAM),
+and the three XIP adapters (flash). The board's vector table has no `TIMER1` entries, so
+each core points `VTOR` at a patched RAM copy, as the WeAct test does.
+
 Each fixture test first prints every fixture call with its traces, on core 0 and then
 on core 1, like the WeAct apps. Traces are off for the stress loop that follows.
 
@@ -126,8 +133,9 @@ results there.
 
 ## Status
 
-One full run of all 47 tests passed on the board (2026-10-30), against SCL-shared-new
-`40eeec8` plus the loader fixes below, committed as `08bf69f`.
+One full run of the first 47 tests passed on the board (2026-10-30), on the loader now
+committed as `08bf69f`. The 11 `scl-fix5-*` tests were added after it and passed in their
+own runs on the same loader. All 58 have not yet run together.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.
 
