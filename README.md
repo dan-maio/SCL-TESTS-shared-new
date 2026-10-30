@@ -70,7 +70,7 @@ the message, and the run completes.
 
 ## Pi-Zero RP2350B status (verified)
 
-All five SMP loader tests passed on the board in three consecutive runs
+All eight SMP loader tests passed on the board in three consecutive runs
 (2026-10-30). See `pico2-pizero-shared/README.md`.
 
 ## Run

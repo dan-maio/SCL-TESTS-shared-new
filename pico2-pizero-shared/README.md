@@ -26,6 +26,13 @@ SCL on the Pi-Zero RP2350B (2x Cortex-M33, 16 MB flash, 8 MB QSPI PSRAM) under t
 | `scl-smp-nolib-sram` | `scl::dynamic-nolib`, eager | SRAM | SRAM | 20000 |
 | `scl-smp-nolib-psram` | `scl::dynamic-nolib`, eager | PSRAM | PSRAM | 5000 |
 | `scl-smp-xip-flash` | `scl::xip-dynamic-newlib` | flash (XIP) | SRAM | 20000 |
+| `scl-smp-xip-flash-psram` | `scl::xip-dynamic-newlib` | flash (XIP) | PSRAM | 5000 |
+| `scl-smp-reloc-psram-big` | `scl::reloc` | PSRAM | PSRAM | 200 |
+| `scl-smp-nolib-psram-big` | `scl::dynamic-nolib`, eager | PSRAM | PSRAM | 200 |
+
+The `-big` modules hold a 64 KB read-only table and 64 KB of writable data, more than
+the RP2350's 16 KB XIP cache. Each worker walks the table and writes and verifies its
+own 16 KB slot, so accesses miss and dirty lines are evicted while both cores run.
 
 Each test checks that:
 
@@ -36,7 +43,7 @@ Each test checks that:
 - no increment of the module's shared counter was lost, and both cores called it;
 - pinned workers stayed on their core, and the loader made its cache calls.
 
-In the PSRAM tests `scl_cache_clean` and `scl_cache_invalidate` do real RP2350 XIP
+In the tests with PSRAM `scl_cache_clean` and `scl_cache_invalidate` do real RP2350 XIP
 cache maintenance.
 
 ## Run
@@ -51,12 +58,14 @@ POWER_CYCLE=1 ./run-all-pizero.sh   # wait for a power cycle between tests
 
 Board support comes from the port's working copy; set `-DUOS_PORT_DIR=...` if it
 moves. The tests use its linker script and its `test/boards/pico2-pizero/hw.sh`.
-Per-check results are in `logs/*/<test>.uart.ttyACM0`.
+Per-check results arrive over semihosting and are in `logs/*/<test>.log`. The runner
+never opens the UART, so it stays free for a terminal; the firmware prints the same
+results there.
 
 ## Status
 
-Three consecutive runs of all five tests passed on the board (2026-10-30), against
-SCL-shared-new `36ac5e6`. Both free workers ran on both cores in the runs inspected.
+Three consecutive runs of all eight tests passed on the board (2026-10-30), against
+SCL-shared-new `e60801e`. Both free workers ran on both cores in the runs inspected.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.
 

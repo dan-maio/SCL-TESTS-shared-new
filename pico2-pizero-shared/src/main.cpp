@@ -124,7 +124,7 @@ namespace {
 
 using mod_fn = std::uint32_t (*)(std::uint32_t, std::uint32_t);
 struct Module {
-    mod_fn magic, compute, fmix, note, shared, core_count;
+    mod_fn magic, compute, fmix, note, shared, core_count, walk, rw;
     std::uint32_t got;
 };
 Module g_mod;
@@ -149,14 +149,14 @@ const scl_sym_entry kMainSyms[] = {
     {"app_cpu_id", reinterpret_cast<std::uint32_t>(&app_cpu_id)},
 };
 
-#if defined(TEST_PSRAM)
+#if defined(TEST_STAGE)
 /* Flash and PSRAM share the QMI, so copy through SRAM (psram-exec's board fix). */
-alignas(8) std::byte g_stage[24 * 1024];
+alignas(8) std::byte g_stage[96 * 1024];
 #endif
 
 std::span<const std::byte> module_image() {
     const std::size_t n = static_cast<std::size_t>(smpmod_image_end - smpmod_image_start);
-#if defined(TEST_PSRAM)
+#if defined(TEST_STAGE)
     if (n > sizeof g_stage) return {};
     std::memcpy(g_stage, smpmod_image_start, n);
     return {g_stage, n};
@@ -209,6 +209,11 @@ bool load_module(std::span<const std::byte> image) {
     g_mod.note = get("mod_note");
     g_mod.shared = get("mod_shared");
     g_mod.core_count = get("mod_core_count");
+#if defined(TEST_BIG)
+    g_mod.walk = get("mod_walk");
+    g_mod.rw = get("mod_rw");
+    if (!g_mod.walk || !g_mod.rw) { g_boot_error = "missing big export"; return false; }
+#endif
     if (!g_mod.magic || !g_mod.compute || !g_mod.fmix || !g_mod.note || !g_mod.shared ||
         !g_mod.core_count) {
         g_boot_error = "missing export";
@@ -228,6 +233,9 @@ __attribute__((constructor(150))) void boot_load() {
     g_text_addr = reinterpret_cast<std::uint32_t>(g_mod.compute);
     const std::uint32_t top = g_text_addr >> 24;
     if (top != TEST_EXPECT_TEXT_TOP) { g_boot_error = "module text in the wrong memory"; return; }
+#if defined(TEST_EXPECT_DATA_TOP)
+    if ((g_mod.got >> 24) != TEST_EXPECT_DATA_TOP) { g_boot_error = "module data in the wrong memory"; return; }
+#endif
     if (call(g_mod.magic) != 0x5CA1AB1Eu) { g_boot_error = "module constructor did not run"; return; }
 
     g_boot_error = nullptr;
@@ -247,6 +255,17 @@ std::uint32_t expect_fmix(std::uint32_t a, std::uint32_t b) {
     volatile float x = (float)(a & 0xFFFFu), y = (float)(b & 0xFFFFu);
     return (std::uint32_t)(x * 0.5f + y * 0.25f);
 }
+
+#if defined(TEST_BIG)
+std::uint32_t expect_walk(std::uint32_t start, std::uint32_t count) {
+    std::uint32_t sum = 0;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const std::uint32_t k = (start + i * 97u) % (16u * 1024u);
+        sum += (k * 2654435761u) ^ 0xA5A5A5A5u;
+    }
+    return sum;
+}
+#endif
 
 constexpr unsigned kWorkers = 4, kIters = TEST_ITERS;
 struct Worker {
@@ -270,6 +289,10 @@ void* worker(void* arg) {
         const std::uint32_t a = seed, b = seed >> 7;
         if (call(g_mod.compute, a, b) != expect_compute(a, b)) ++w->errors;
         if (call(g_mod.fmix, a, b) != expect_fmix(a, b)) ++w->errors;
+#if defined(TEST_BIG)
+        if (call(g_mod.walk, a, 512) != expect_walk(a, 512)) ++w->errors;
+        w->errors = w->errors + call(g_mod.rw, w->id, a);
+#endif
         call(g_mod.note);
         w->cores_seen = w->cores_seen | (1u << (port_cpu_id() & 1u));
         if ((i & 0x3FFu) == 0) this_thread::yield();
@@ -287,11 +310,19 @@ void* idle1(void*) {
     return nullptr;
 }
 
-void say(const char* s) { uart::write(s); }
+/* Results go to the UART and over semihosting, which the runner reads. */
+void say(const char* s) {
+    uart::write(s);
+    if (!uos_debug_host_attached()) return;
+    register unsigned r0 __asm__("r0") = 0x04u;  // SYS_WRITE0
+    register const char* r1 __asm__("r1") = s;
+    __asm__ volatile("bkpt 0xAB" : "+r"(r0) : "r"(r1) : "memory");
+}
 void sayf(const char* fmt, unsigned a = 0, unsigned b = 0, unsigned c = 0, unsigned d = 0) {
     char l[120];
     const int n = std::snprintf(l, sizeof l, fmt, a, b, c, d);
-    uart::write(l, static_cast<std::size_t>(n));
+    (void)n;
+    say(l);
 }
 
 }  // namespace

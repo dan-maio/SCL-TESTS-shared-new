@@ -56,4 +56,35 @@ uint32_t mod_note(uint32_t, uint32_t) {
 uint32_t mod_shared(uint32_t, uint32_t) { return g_shared; }
 uint32_t mod_core_count(uint32_t cpu, uint32_t) { return g_per_core[cpu & 1u]; }
 
+#if defined(SMP_BIG)
+/* Larger than the RP2350's 16 KB XIP cache, so PSRAM accesses miss and dirty lines
+ * get evicted while both cores run. */
+constexpr unsigned kBigWords = 16 * 1024, kRwWords = 4 * 1024, kRwSlots = 4;
+#define E(i) (((i) * 2654435761u) ^ 0xA5A5A5A5u)
+struct BigTable {
+    uint32_t w[kBigWords];
+    constexpr BigTable() : w() {
+        for (unsigned i = 0; i < kBigWords; ++i) w[i] = E(i);
+    }
+};
+constinit const BigTable kBig;
+uint32_t g_rw[kRwSlots][kRwWords];
+
+uint32_t mod_walk(uint32_t start, uint32_t count) {
+    uint32_t sum = 0;
+    for (uint32_t i = 0; i < count; ++i) sum += kBig.w[(start + i * 97u) % kBigWords];
+    return sum;
+}
+
+/* Each worker owns one slot: write it, read it back, return the mismatches. */
+uint32_t mod_rw(uint32_t slot, uint32_t seed) {
+    volatile uint32_t* p = g_rw[slot % kRwSlots];
+    for (unsigned i = 0; i < kRwWords; ++i) p[i] = seed + i * 3u;
+    uint32_t bad = 0;
+    for (unsigned i = 0; i < kRwWords; ++i)
+        if (p[i] != seed + i * 3u) ++bad;
+    return bad;
+}
+#endif
+
 }  // extern "C"
