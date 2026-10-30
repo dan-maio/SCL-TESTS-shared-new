@@ -28,11 +28,17 @@ Because `scl::common` in SCL-shared-new now includes:
 - `src/port/os-hooks.c` (weak loader lock hooks),
 - `src/port/cache.c` (weak cache/publication hooks),
 
-every firmware in these suites links those objects. On bare-metal/QEMU the
-hooks are no-ops; the code paths remain unchanged unless the application
-overrides them.
+firmware linking `scl::common` builds those objects. `scl::static` does not link
+`scl::common`: since `1fb1680` it adds only the two `port/` files, so standalone
+static firmware does not get `symtab-runtime.cpp`.
+
+On bare-metal/QEMU the lock hooks are no-ops and the cache hooks are barriers
+only (DSB/ISB), unless the application overrides them.
 
 ## QEMU validation performed
+
+Only these four commands have recorded results; `overlay-shared` and
+`static-shared` have none.
 
 | Command (from the suite directory) | Result |
 |---|---|
@@ -47,8 +53,10 @@ compatible with SCL-shared-new.
 
 ## WeAct F411CE validation
 
-All 18 tests pass on the WeAct F411CE with the W25Q64 fitted (2026-10-30),
-using `run-all-weact.sh` (`RUN_MS=180000`):
+All 18 tests have a passing log on the WeAct F411CE with the W25Q64 fitted
+(2026-10-30), using `run-all-weact.sh` (`RUN_MS=180000`). The logs come from 15
+partial sessions, many before `1fb1680`, not one full run; the root `README.md`
+describes the limits of this evidence.
 
 | Group | Result |
 |---|---|
@@ -60,7 +68,7 @@ using `run-all-weact.sh` (`RUN_MS=180000`):
 | static / static-cpp / static-direct / static-drv | PASS |
 | XIP semihosting / direct / no-PIC / no-PIC-simple / interrupts / SPI-flash | PASS |
 
-Two runner/documentation fixes came out of the hardware run:
+Three runner/documentation fixes came out of the hardware run:
 
 - PASS is decided by the completion marker, not the process exit code: OpenOCD
   returns 1 after a clean `shutdown` on the WCH-Link probe.
@@ -81,8 +89,27 @@ test them:
    compile-time `SCL_REGISTER_SYM` table.
 3. Remove the `.scl_symtab` placeholder/`objcopy` step.
 
-`SCL-shared-new/docs/BOOT-SYMTAB.md` contains the code; the existing
-`dl-impl.cpp` fallback is the reference implementation.
+`SCL-shared/docs/BOOT-SYMTAB.md` contains the code; the existing fallback in
+`dynamic-shared/test/platforms/board-hosted/vendor/firmware/src/dl-impl.cpp` is
+the reference implementation. The §1 snippet in `BOOT-SYMTAB.md` also needs
+`#include "loader/sources/memory-byte-source.hpp"` and
+`#include "dynamic-nolib/dl.hpp"` to compile.
+
+## Known issues in SCL-shared-new (`1fb1680`)
+
+Found by reviewing the code against its docs. They are recorded here so test work
+can target them; none are fixed in the pinned commit.
+
+| Issue | Effect |
+|---|---|
+| `scl::static` does not link `symtab-runtime.cpp` | `scl::symtab::registered()` gives an undefined reference in static-only firmware, and `collect()` lives in the same file. `add_entries()` itself is available. |
+| The M7 example in `RTOS-MULTICORE.md` §3 overrides only `scl_cache_clean` and `scl_cache_invalidate` | RAM loaders call `scl_cache_clean_invalidate()`, whose default is only a barrier, so following the example performs no cache maintenance for them. |
+| RAM `dynamic-newlib` has no lock calls | Only its XIP adapter is guarded, although the docs describe lock guards on every loader. |
+| Constructors run under the lock | `dlopen_source`, reloc `load` and `load_set` hold the guard during constructors; the docs say the hooks are not held while module code runs. |
+| `scl_overlay_load` | The `resident` check is outside the lock, and there is no cache maintenance after the copy into the window. |
+| `tests/run.sh` in a clean clone | Fails at `open ELF`: the default `411ce-100Mhz.elf` is gitignored. Pass another ARM ELF with `ELF=...`. |
+| `sidecar-elf-example.ld` | The `SIDECAR` region ends at `0x080A0000`, past the end of the F411's 512K flash at `0x08080000`. |
+| `SCL-shared/docs/manual.md` | Unchanged from the upstream repository, so it describes the submodule layout and omits the new APIs. |
 
 ## Updating the loader
 
@@ -96,6 +123,8 @@ git commit -m "bump SCL-shared-new"
 
 ## Next steps
 
+- One complete `run-all-weact.sh` run against the pinned commit.
+- Fix the loader issues above in SCL-shared-new, then bump the submodule.
 - NUCLEO-F411RE hardware validation (the suites support `SCL_BOARD=nucleo`).
 - Add a slot in `dynamic-shared` that loads `main`'s table at boot (semihosting
   or sidecar) and runs with `gen-symtab` disabled.

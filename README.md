@@ -22,7 +22,10 @@ SCL-TESTS-shared-new/
 Each suite's `include` and `src` symlinks resolve into `SCL-shared/`, so the
 suites compile the new loader sources with their own flags.
 
-## QEMU status (verified)
+## QEMU status (recorded)
+
+Results recorded when the suites were wired to SCL-shared-new. Only these four
+commands have QEMU results; `overlay-shared` and `static-shared` have none.
 
 | Suite | Command | Result |
 |---|---|---|
@@ -34,10 +37,10 @@ suites compile the new loader sources with their own flags.
 The dynamic test still uses the retained build-time `gen-symtab` flow, which
 confirms the host tools and the new loader sources work together.
 
-## WeAct F411CE status (verified)
+## WeAct F411CE status (recorded)
 
-All tests pass on the WeAct F411CE with the W25Q64 fitted (2026-10-30),
-using `RUN_MS=180000`:
+All 18 tests have a passing log on the WeAct F411CE with the W25Q64 fitted
+(2026-10-30), using `RUN_MS=180000`:
 
 | Group | Tests | Result |
 |---|---|---|
@@ -51,6 +54,22 @@ using `RUN_MS=180000`:
 The runner treats a test as PASS when its completion marker appears in the log;
 OpenOCD returns 1 after a clean `shutdown` on this probe. `xip-spi-flash` and
 `static-drv` exercise the W25Q64.
+
+How far this evidence goes:
+
+- The results combine 15 partial `run-all-weact.sh` sessions (09:36–10:35), not
+  one uninterrupted run, and many of the logs predate SCL-shared-new `1fb1680`,
+  the commit pinned now. To get a single result for the pinned commit, run
+  `./run-all-weact.sh` once from start to finish.
+- A completion marker shows the firmware reached its end, not that every check
+  passed. The latest logs contain no `FAIL` lines, but the runner does not look
+  for them.
+- `[ERROR]` lines in a passing log are not always faults. In `static`, the
+  `load_bin ... buffer has 2824` line comes from the bounds test, which expects
+  that error. `static-drv` logs `missing relocation/dynsym/dynstr data` four
+  times while loading its drivers; `libspi.so` has no relocation section. The
+  run still completes, but this has not been confirmed as harmless for the
+  other drivers.
 
 ## Run
 
@@ -91,8 +110,30 @@ cd relocatable-shared && ./test-relocatable/build-and-run.sh weact
 cd dynamic-shared && ./test-dynamic/build-and-run.sh weact test1
 ```
 
-Prerequisites: `arm-none-eabi-gcc/g++` (xPack is auto-detected by
-`tools-config.sh`) and `qemu-system-arm`.
+Prerequisites: `arm-none-eabi-gcc/g++` and `openocd` (each suite's
+`tools-config.sh` falls back to the xPack paths under
+`/home/dan/.local/xPacks`), plus `qemu-system-arm` for the QEMU commands.
+`run-all-weact.sh` has its own toolchain fallback, because the repository root
+has no `tools-config.sh`.
+
+## Cloning
+
+```sh
+git clone /home/dan/Downloads/GIT/SCL-TESTS-shared-new.git
+cd SCL-TESTS-shared-new && git submodule update --init
+```
+
+The tree is not self-contained, so it only builds as-is on this machine:
+
+- Seven tracked symlinks point at absolute paths under
+  `/home/dan/Documents/shared-loaders-weact_agy`
+  (`*/test/fixtures/fixtures`, the `libsh1`, `libsh2` and `new-lib` links under
+  `static-shared/test-static`, and
+  `test-xip-static-direct/src/sections-flatfs-hosted.ld`).
+- `.gitmodules`, the toolchain files and the debug scripts use absolute paths
+  under `/home/dan`.
+- `*/test/cmake/toolchains/arm-none-eabi-gcc.cmake` is a broken symlink in the
+  `dynamic`, `optimal`, `overlay` and `static` suites.
 
 ## Updating the loader
 
@@ -106,20 +147,28 @@ cd .. && git add SCL-shared && git commit -m "bump SCL-shared-new"
 ## What is exercised
 
 - `scl::common` now includes `symtab-runtime.cpp`, `port/os-hooks.c` and
-  `port/cache.c`; all suites link them.
-- Reloc/optimal/static/XIP load paths now take the lock hooks and cache calls
-  (weak no-ops on bare metal).
+  `port/cache.c`, so suites linking it build them. `scl::static` on its own
+  links only the two `port/` files.
+- The tests run through the new lock and cache calls with their weak defaults:
+  the lock hooks are no-ops and the cache hooks are barriers only. Lock calls
+  are in the reloc, optimal, overlay, static, nolib and XIP paths. Cache calls
+  are in reloc, static, nolib and XIP.
 - The dynamic-newlib test exercises the retained `gen-symtab` + `.scl_symtab`
   path; the boot-time/semihosting alternatives are documented in
   `SCL-shared/docs/BOOT-SYMTAB.md`.
-- `scl::static` now has `symbol_table::add_entries()` and cache maintenance
-  before constructors.
-- `dynamic-nolib` has eager-binding (`dl_set_lazy_binding`) and external-table
-  (`dl_set_symtab`) APIs; the existing tests run with defaults unchanged.
+
+## What is not exercised
+
+No suite calls the new APIs: `dl_set_symtab`, `dl_set_lazy_binding`,
+`scl::symtab::*`, `SCL_REGISTER_SYM`, `add_entries` or `scl_publish_release`.
+The passing results therefore show that the existing loader paths did not
+regress, not that these APIs work on a target. `SCL-shared/tests/` covers the
+symbol-table functions and `link_context` on the host only. See
+`docs/SCL-SHARED-NEW.md` for known loader issues.
 
 ## Notes
 
-- All suites above have now been executed on the WeAct board. The NUCLEO board
+- All 18 runner tests have been executed on the WeAct board. The NUCLEO board
   has not been validated.
 - `scl::static` standalone targets now link `src/port/os-hooks.c` and
   `src/port/cache.c` (SCL-shared-new commit `1fb1680`); without that, static-only

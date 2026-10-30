@@ -1,5 +1,9 @@
 # SCL-TESTS-shared — Test Manual
 
+> **SCL-TESTS-shared-new:** this manual was written for `SCL-TESTS-shared` and
+> still applies to the suites here. The new tree's submodule, runner, status and
+> known issues are in `../README.md` and `SCL-SHARED-NEW.md`.
+
 **Version:** documents the current `SCL-TESTS-shared` tree: five test suites
 (`dynamic-shared`, `static-shared`, `optimal-shared`, `overlay-shared`,
 `relocatable-shared`) that exercise the seven SCL loader cases from the
@@ -108,7 +112,7 @@ All firmware is **hard-float** (`-mfloat-abi=hard -mfpu=fpv4-sp-d16`) unless not
 ## 2. How the loader gets into the tests
 
 - **`SCL-shared`** is a git submodule (`.gitmodules`:
-  `url = /home/dan/Downloads/GIT/SCL-shared.git`). Check it out with
+  `url = /home/dan/Downloads/GIT/SCL-shared-new.git`). Check it out with
   `git submodule update --init`.
 - **`include/`** and **`src/`** at the root of each suite are symlinks to
   `../SCL-shared/include` and `../SCL-shared/src`, so `#include "scl/..."`,

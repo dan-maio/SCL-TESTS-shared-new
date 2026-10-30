@@ -10,7 +10,8 @@
 # the summary at the end reports PASS/FAIL and the log paths.
 #
 # Tunables:
-#   RUN_MS=60000   time each firmware is allowed to run (default 60 s)
+#   RUN_MS=180000  time each firmware is allowed to run (default 180 s)
+#   WALL_MS=600000 hard cap per test, including build time (default 600 s)
 #   GAP=3          seconds between tests
 #   SKIP_SPI=1     skip the two tests that need the W25Q64 SPI flash
 #   LOGDIR=...     log directory (default logs/weact-<timestamp>)
