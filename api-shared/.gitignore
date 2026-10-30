@@ -1,0 +1,4 @@
+**/fixtures/*.so
+**/fixtures/windows.generated.ld
+**/fixtures/link.txt
+**/fixtures/manifest.txt

@@ -6,7 +6,7 @@
 #   DRY_RUN=1 ./run-all-weact.sh       # print commands only
 #
 # Each test is flashed, run with the semihosting console streamed live, and
-# logged. A 3-second gap is inserted between tests. Failures do not stop the run;
+# logged. A test passes when its marker appears and no failure pattern does. A 3-second gap is inserted between tests. Failures do not stop the run;
 # the summary at the end reports PASS/FAIL and the log paths.
 #
 # Tunables:
@@ -59,6 +59,10 @@ TESTS=(
   "xip-interrupt-static|static-shared|./test-xip/build-and-run.sh weact interrupt-static|regular tests done"
   "xip-interrupt-static-direct|static-shared|./test-xip/build-and-run.sh weact interrupt-static-direct|regular tests done"
   "xip-spi-flash|static-shared|./test-xip/build-and-run.sh weact static/spi-flash|========== DONE =========="
+  "api-static-boot-table|api-shared/api-static-boot-table|./run.sh|RESULT: SUCCESS"
+  "api-optimal-boot-table|api-shared/api-optimal-boot-table|./run.sh|RESULT: SUCCESS"
+  "api-dynamic-xip-semihost-table|api-shared/api-dynamic-xip-semihost-table|./run.sh|RESULT: SUCCESS"
+  "api-nolib-eager|api-shared/api-nolib-eager|./run.sh|RESULT: SUCCESS"
 )
 
 SPI_TESTS=" static-drv xip-spi-flash "
@@ -103,7 +107,12 @@ for entry in "${TESTS[@]}"; do
         bash -c "$cmd" ) 2>&1 | tee "$log"
     rc=${PIPESTATUS[0]}
 
-    if grep -qF -- "$marker" "$log"; then
+    if grep -qE -- 'RESULT: FAILURE|FAIL:|HardFault|LOAD FAILED' "$log"; then
+        echo "--- FAIL $name (rc=$rc, failure reported)"
+        grep -m3 -E -- 'RESULT: FAILURE|FAIL:|HardFault|LOAD FAILED' "$log" | sed 's/^/    | /'
+        RESULTS+=("FAIL|$name|$log")
+        ((fail++))
+    elif grep -qF -- "$marker" "$log"; then
         echo "--- PASS $name (rc=$rc, marker found)"
         RESULTS+=("PASS|$name|$log")
         ((pass++))
