@@ -44,19 +44,16 @@ confirms the host tools and the new loader sources work together.
 
 | Board | Suite | Tests | Result (2026-10-30) | Loader |
 |---|---|---|---|---|
-| WeAct F411CE + W25Q64 | suites + `api-shared/` | 22 | all pass | `380161e`, 5 re-run at `b05616a` |
+| WeAct F411CE + W25Q64 | suites + `api-shared/` | 22 | all pass, in one run | `9f1320f` |
 | Pi-Zero RP2350B + PSRAM | `pico2-pizero-shared/` | 77 | all pass, in one run | `9f1320f` |
 
-The WeAct board has not run since `9f1320f`, which changed `scl::static`, `scl::reloc`,
-`scl::optimal` and `scl::dynamic-newlib`. The Pi-Zero's 77 tests pass at that commit.
-The NUCLEO board has not been validated.
+Both boards pass at the same commit. The NUCLEO board has not been validated.
 
 ## WeAct F411CE status (verified)
 
-One `./run-all-weact.sh` run from clean builds, with `RUN_MS=180000`, at `380161e`: 21 of 22
-passed. `static-cpp` failed because `patch_shlib()` runs twice in that test and an addend
-was applied twice. After the fix (`b05616a`), `static`, `static-cpp`, `static-direct`,
-`static-drv` and `api-static-boot-table` were re-run and passed.
+One `./run-all-weact.sh` run from clean builds, with `RUN_MS=180000`, at `9f1320f`: all 22
+passed. An earlier run at `380161e` found that `static-cpp` applied an addend twice, because
+`patch_shlib()` runs twice in that test; `b05616a` fixed it.
 
 | Group | Tests | Result |
 |---|---|---|

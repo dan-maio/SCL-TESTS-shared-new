@@ -434,6 +434,8 @@ any hand-made file, is all it takes.
 
 ## Dual-core: the Pi-Zero RP2350B results
 
+`SCL-EXAMPLES-shared-new/pizero/` has the `float`, `spifs` and `combo` examples for each loader on this board.
+
 `pico2-pizero-shared/` in `SCL-TESTS-shared-new` runs these loaders on a Pi-Zero RP2350B
 (2x Cortex-M33, 16 MB flash, 8 MB PSRAM) under the µOS++ SMP kernel. Every load and patch
 happens on core 0 at boot, with core 1 still in the bootrom. Only then does SMP start,

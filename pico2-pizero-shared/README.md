@@ -1,5 +1,7 @@
 # pico2-pizero-shared
 
+Small examples of the same loaders on this board are in `SCL-EXAMPLES-shared-new/pizero/`.
+
 SCL on the Pi-Zero RP2350B (2x Cortex-M33, 16 MB flash, 8 MB QSPI PSRAM) under the
 µOS++ III SMP kernel. It tests one rule:
 
@@ -162,7 +164,7 @@ between tests.
   success with every import unpatched, and the first import call jumped to the PLT
   stub's offset. Libraries from the default linker script have only `.rel.plt`. This is
   also what the `missing relocation/dynsym/dynstr data` lines in the WeAct `static-drv`
-  logs were, so that test's behaviour changes with the fix and needs a re-run.
+  logs were; `static-drv` no longer logs them, and passes at `9f1320f`.
 - **C++ exceptions needed five separate fixes on this board.**
   - `--specs=nano.specs` links `libstdc++_nano`, whose `__cxa_throw` has no unwind tables,
     so a throw stops at its first frame. These tests link the full `libsupc++`.

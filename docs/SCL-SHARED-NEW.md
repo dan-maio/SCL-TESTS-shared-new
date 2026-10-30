@@ -53,9 +53,8 @@ compatible with SCL-shared-new.
 
 ## WeAct F411CE validation
 
-One `run-all-weact.sh` run from clean builds (`RUN_MS=180000`) at `380161e`: 21 of 22 passed.
-`static-cpp` failed on a double-applied addend, fixed in `b05616a`, after which the five
-tests it could affect were re-run and passed:
+One `run-all-weact.sh` run from clean builds (`RUN_MS=180000`) at `9f1320f`: all 22 passed.
+An earlier run at `380161e` found a double-applied addend in `static-cpp`, fixed in `b05616a`.
 
 | Group | Result |
 |---|---|
@@ -101,10 +100,11 @@ git commit -m "bump SCL-shared-new"
 `pico2-pizero-shared/` runs 77 tests under the µOS++ SMP kernel, all passing in one run at
 `9f1320f`: every loader, on the shared fixtures, with C++ exceptions and an interrupt on each
 core. It found most of the loader fixes since `ab7737d`. The suite's README lists them.
+`SCL-EXAMPLES-shared-new/pizero/` has the `float`, `spifs` and `combo` examples for every loader
+on this board; all 27 pass at `9f1320f`.
 
 ## Next steps
 
-- Re-run the WeAct tests and examples at `9f1320f`.
 - NUCLEO-F411RE hardware validation (the suites support `SCL_BOARD=nucleo`).
 - Cache overrides on a Cortex-M7. `pico2-pizero-shared/` covers SMP and the RP2350's XIP
   cache.
