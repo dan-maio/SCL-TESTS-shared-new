@@ -179,7 +179,14 @@ add_custom_target(scl-fix-modules DEPENDS ${FIX_FILES})
 
 # name  loader-define  scl-target  extension  arena-section  text MSB  psram  iterations
 function(scl_fix_test name loader target ext section top psram iters)
-    set(defs TRACE SEMIHOST HW_BUILD TEST_${loader} TEST_NAME="${name}" TEST_EXPECT_TEXT_TOP=${top}
+    if(target STREQUAL "scl::xip-static")
+        set(xip_variant TEST_XIP_STATIC)
+    elseif(target STREQUAL "scl::xip-dynamic-nolib")
+        set(xip_variant TEST_XIP_NOLIB)
+    else()
+        set(xip_variant "")
+    endif()
+    set(defs ${xip_variant} TRACE SEMIHOST HW_BUILD TEST_${loader} TEST_NAME="${name}" TEST_EXPECT_TEXT_TOP=${top}
         TEST_ITERS=${iters} FIXTURE_DIR="${FIX_DIR}" FIXTURE_EXT="${ext}")
     set(group 1)
     if("GROUP2" IN_LIST ARGN)
@@ -250,6 +257,14 @@ scl_fix_test(scl-fix-optimal-sram     LOADER_OPTIMAL scl::optimal .opt-sram.so  
 scl_fix_test(scl-fix-optimal-psram    LOADER_OPTIMAL scl::optimal .opt-psram.so .bss.scl_arena 0x11 ON  500)
 scl_fix_test(scl-fix2-optimal-sram    LOADER_OPTIMAL scl::optimal .opt-sram.so  .bss.scl_arena 0x20 OFF 5000 GROUP2)
 scl_fix_test(scl-fix2-optimal-psram   LOADER_OPTIMAL scl::optimal .opt-psram.so .bss.scl_arena 0x11 ON  1000 GROUP2)
+scl_fix_test(scl-fix-xipstatic-flash       LOADER_XIP scl::xip-static         .so .bss.scl_arena   0x10 OFF  2000)
+scl_fix_test(scl-fix-xipstatic-flash-psram LOADER_XIP scl::xip-static         .so .psram.scl_arena 0x10 DATA 500)
+scl_fix_test(scl-fix2-xipstatic-flash       LOADER_XIP scl::xip-static        .so .bss.scl_arena   0x10 OFF  2000 GROUP2)
+scl_fix_test(scl-fix2-xipstatic-flash-psram LOADER_XIP scl::xip-static        .so .psram.scl_arena 0x10 DATA 500  GROUP2)
+scl_fix_test(scl-fix-xipnolib-flash        LOADER_XIP scl::xip-dynamic-nolib  .so .bss.scl_arena   0x10 OFF  2000)
+scl_fix_test(scl-fix-xipnolib-flash-psram  LOADER_XIP scl::xip-dynamic-nolib  .so .psram.scl_arena 0x10 DATA 500)
+scl_fix_test(scl-fix2-xipnolib-flash        LOADER_XIP scl::xip-dynamic-nolib .so .bss.scl_arena   0x10 OFF  2000 GROUP2)
+scl_fix_test(scl-fix2-xipnolib-flash-psram  LOADER_XIP scl::xip-dynamic-nolib .so .psram.scl_arena 0x10 DATA 500  GROUP2)
 
 # ---- the WeAct overlay fixtures: linked with the firmware, one shared window -------
 set(OV_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../overlay-shared/test-overlay/test1/src")

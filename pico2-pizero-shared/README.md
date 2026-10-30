@@ -84,6 +84,8 @@ More loaders on the same fixtures, all read over semihosting at boot:
 | `scl-fix3-static-sram`, `scl-fix3-static-psram` | `scl::static` | `libprov`, `libcons`, `mylib1`, `mylib2`, plain `-fPIC` | SRAM, PSRAM |
 | `scl-fix-optimal-*`, `scl-fix2-optimal-*` | `scl::optimal` | groups 1 and 2, `-fno-pic` at fixed addresses | SRAM, PSRAM windows |
 | `scl-fix-overlay-sram`, `scl-fix-overlay-psram` | `scl::overlay` | `ov1`, `ov2`, `ovcpp`, linked with the firmware | SRAM, PSRAM window |
+| `scl-fix-xipstatic-*`, `scl-fix2-xipstatic-*` | `scl::xip-static` | groups 1 and 2, `r10` split | flash, data in SRAM or PSRAM |
+| `scl-fix-xipnolib-*`, `scl-fix2-xipnolib-*` | `scl::xip-dynamic-nolib` | groups 1 and 2, `r10` split | flash, data in SRAM or PSRAM |
 
 `scl::static` skips the `c1`/`c2`/`cpp3` cycle, as the WeAct static tests do. Overlays are
 swapped only at boot: `ovcpp` stays resident and both cores call it.
@@ -119,6 +121,9 @@ As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail
 The port's `hw.sh` advises one test per power cycle. These runs did not power-cycle
 between tests.
 
+The eight `xipstatic` and `xipnolib` tests were added after that run and passed in one
+run of their own, on the same loader with `set_symtab()` added to those two adapters.
+
 ## What the board showed
 
 - **A flash module's imports must not use a PLT.** A PLT reads a GOT in flash, which
@@ -129,6 +134,10 @@ between tests.
   stub's offset. Libraries from the default linker script have only `.rel.plt`. This is
   also what the `missing relocation/dynsym/dynstr data` lines in the WeAct `static-drv`
   logs were, so that test's behaviour changes with the fix and needs a re-run.
+- **`scl::xip-static` and `scl::xip-dynamic-nolib` needed a PIE main.** Both now take
+  `set_symtab()`. `xip::stat` binds main's imports into the image at provision time, so
+  only calls between modules do a lookup: 48000 lock acquisitions against 264000 for
+  `xip::nolib` in the same test.
 - **Load after static constructors.** SCL's globals (`g_main_ctx`, `g_handles`, XIP's
   `g_ctx`) are C++ objects. A load from an earlier constructor is wiped when they are
   constructed, and the failure only shows at the first call-time lookup. These tests
@@ -149,7 +158,6 @@ between tests.
 ## Not tested
 
 - Loading or unloading after SMP has started, which this design excludes.
-- `scl::xip-static` and `scl::xip-dynamic-nolib`.
 - The C++ exception fixtures (`ehx_catch`, `libcppeh`, `libcppsh`), and the STM32 driver
   fixtures (`libspi`, `libled`, `libuart`).
 - Fixture functions that write their own state without a lock, on two cores at once.

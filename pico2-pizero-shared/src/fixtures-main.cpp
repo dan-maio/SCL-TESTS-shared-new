@@ -34,7 +34,16 @@
 #include "dynamic-nolib/dl.hpp"
 #include "loader/sources/memory-byte-source.hpp"
 #elif defined(TEST_LOADER_XIP)
+#if defined(TEST_XIP_STATIC)
+#include "xip/static/adapter.hpp"
+namespace xipl = xip::stat;
+#elif defined(TEST_XIP_NOLIB)
+#include "xip/dynamic-nolib/adapter.hpp"
+namespace xipl = xip::nolib;
+#else
 #include "xip/dynamic-newlib/adapter.hpp"
+namespace xipl = xip::newlib;
+#endif
 #elif defined(TEST_LOADER_NEWLIB)
 #include "dynamic-newlib/dynamic-linker.hpp"
 #include "dynamic-newlib/link-context.hpp"
@@ -355,7 +364,11 @@ bool provision_flash() {
     u32 off = kFlashOffset;
     for (int i = 0; i < kCount; ++i) {
         std::span<std::byte> img{g_stage[i], g_size[i]};
-        xip::newlib::patch_main_imports(img);
+#if defined(TEST_XIP_STATIC)
+        xip::stat::bind_host_imports(img);
+#else
+        xipl::patch_main_imports(img);
+#endif
         const u32 pm = irq_off();
         flash_write_ram(off, reinterpret_cast<const std::uint8_t*>(img.data()), img.size());
         irq_restore(pm);
@@ -500,19 +513,28 @@ bool load_fixtures() {
     GET(library_function, 2); GET(retstr, 2);
     GET(lf, 3); GET(lf2, 3); GET(lf3, 3); GET(xxx, 3);
 #elif defined(TEST_LOADER_XIP)
-    xip::newlib::set_symtab(kMainSyms, kNumSyms);
+    xipl::set_symtab(kMainSyms, kNumSyms);
     if (!provision_flash()) return false;
 #if defined(TEST_PSRAM)
     if (!psram::init()) { g_boot_error = "psram::init"; return false; }
 #endif
+#if defined(TEST_XIP_STATIC)
+    static xip::stat::SModule h[kCount];
+    for (int i = 0; i < kCount; ++i) {
+        if (!xip::stat::load(g_flash_image[i], h[i])) { g_boot_error = "xip::stat::load"; return false; }
+    }
+#define GET(field, i) ok = ok && set(g_fx.field, reinterpret_cast<fn2>(xip::stat::resolve(h[i], #field)), \
+                                     h[i].got_base, "missing " #field)
+#else
     static void* h[kCount];
     for (int i = 0; i < kCount; ++i) {
-        h[i] = xip::newlib::dlopen(g_flash_image[i], kNames[i]);
+        h[i] = xipl::dlopen(g_flash_image[i], kNames[i]);
         if (!h[i]) { g_boot_error = "xip dlopen"; return false; }
-        if (!xip::newlib::is_xip(h[i])) { g_boot_error = "fixture was not loaded XIP"; return false; }
+        if (!xipl::is_xip(h[i])) { g_boot_error = "fixture was not loaded XIP"; return false; }
     }
-#define GET(field, i) ok = ok && set(g_fx.field, reinterpret_cast<fn2>(xip::newlib::dlsym(h[i], #field)), \
-                                     xip::newlib::get_got_base(h[i]), "missing " #field)
+#define GET(field, i) ok = ok && set(g_fx.field, reinterpret_cast<fn2>(xipl::dlsym(h[i], #field)), \
+                                     xipl::get_got_base(h[i]), "missing " #field)
+#endif
 #if TEST_GROUP == 1
     GET(cpp3_method, 0); GET(cpp3_recurse, 0); GET(cpp3_float_cross, 0); GET(cpp3_heap, 0);
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
