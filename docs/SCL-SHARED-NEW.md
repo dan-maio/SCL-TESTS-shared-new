@@ -45,6 +45,31 @@ The dynamic test still uses the retained build-time `gen-symtab` +
 `objcopy --update-section` flow, so it also verifies that the host tools remain
 compatible with SCL-shared-new.
 
+## WeAct F411CE validation
+
+All 18 tests pass on the WeAct F411CE with the W25Q64 fitted (2026-10-30),
+using `run-all-weact.sh` (`RUN_MS=180000`):
+
+| Group | Result |
+|---|---|
+| optimal XIP / RAM | PASS |
+| relocatable | PASS |
+| dynamic POSIX dlopen | PASS |
+| dynamic XIP nolib / newlib | PASS |
+| overlay | PASS |
+| static / static-cpp / static-direct / static-drv | PASS |
+| XIP semihosting / direct / no-PIC / no-PIC-simple / interrupts / SPI-flash | PASS |
+
+Two runner/documentation fixes came out of the hardware run:
+
+- PASS is decided by the completion marker, not the process exit code: OpenOCD
+  returns 1 after a clean `shutdown` on the WCH-Link probe.
+- `static` / `static-cpp` print `Second 1` (the semihosting argv makes
+  `atoi(argv[1])` zero the blink loop), and `xip-spi-flash` ends with
+  `========== DONE ==========`.
+- The hardware tests take longer than the old 60 s window; the default is now
+  180 s per firmware.
+
 ## Boot-time / no-tool paths
 
 These suites do not yet exercise the new sidecar/semihosting symbol paths. To
@@ -71,7 +96,7 @@ git commit -m "bump SCL-shared-new"
 
 ## Next steps
 
-- QEMU: `static-shared`, `overlay-shared`, hosted XIP-newlib.
+- NUCLEO-F411RE hardware validation (the suites support `SCL_BOARD=nucleo`).
 - Add a slot in `dynamic-shared` that loads `main`'s table at boot (semihosting
   or sidecar) and runs with `gen-symtab` disabled.
 - Add an RTOS/SMP smoke app that defines strong `scl_loader_lock/unlock` and

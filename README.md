@@ -34,6 +34,24 @@ suites compile the new loader sources with their own flags.
 The dynamic test still uses the retained build-time `gen-symtab` flow, which
 confirms the host tools and the new loader sources work together.
 
+## WeAct F411CE status (verified)
+
+All tests pass on the WeAct F411CE with the W25Q64 fitted (2026-10-30),
+using `RUN_MS=180000`:
+
+| Group | Tests | Result |
+|---|---|---|
+| optimal | `optimal-xip`, `optimal-ram` | PASS |
+| relocatable | `relocatable` | PASS |
+| dynamic | `dynamic-dlopen`, `dynamic-xip-nolib`, `dynamic-xip-newlib` | PASS |
+| overlay | `overlay` | PASS |
+| static | `static`, `static-cpp`, `static-direct`, `static-drv` | PASS |
+| XIP static | `xip-static-semihosting`, `xip-static-direct`, `xip-static-no-pic`, `xip-static-no-pic-simple`, `xip-interrupt-static`, `xip-interrupt-static-direct`, `xip-spi-flash` | PASS |
+
+The runner treats a test as PASS when its completion marker appears in the log;
+OpenOCD returns 1 after a clean `shutdown` on this probe. `xip-spi-flash` and
+`static-drv` exercise the W25Q64.
+
 ## Run
 
 ```sh
@@ -55,8 +73,10 @@ DRY_RUN=1 ./run-all-weact.sh
 under `logs/weact-<timestamp>/`, continues after failures, and prints a
 PASS/FAIL summary at the end.
 
-Tunables: `RUN_MS` (default 60000 ms per firmware), `GAP` (default 3 s),
-`SKIP_SPI`, `LOGDIR`.
+Tunables: `RUN_MS` (default 180000 ms per firmware), `WALL_MS` (default
+600000 ms hard cap per test including build), `GAP` (default 3 s), `SKIP_SPI`,
+`LOGDIR`. PASS is decided by the test's completion marker, because OpenOCD
+returns 1 after a clean `shutdown` on this probe.
 
 Individual suites:
 
@@ -97,8 +117,12 @@ cd .. && git add SCL-shared && git commit -m "bump SCL-shared-new"
 - `dynamic-nolib` has eager-binding (`dl_set_lazy_binding`) and external-table
   (`dl_set_symtab`) APIs; the existing tests run with defaults unchanged.
 
-## Not yet run
+## Notes
 
-`static-shared`, `overlay-shared` and the hosted XIP-newlib test have not been
-executed on QEMU here; they are the next validation steps. Hardware (WeAct /
-NUCLEO) tests still require boards.
+- All suites above have now been executed on the WeAct board. The NUCLEO board
+  has not been validated.
+- `scl::static` standalone targets now link `src/port/os-hooks.c` and
+  `src/port/cache.c` (SCL-shared-new commit `1fb1680`); without that, static-only
+  firmware failed to link `scl_loader_lock/unlock`.
+- The SPI tests (`static-drv`, `xip-spi-flash`) require the W25Q64; both passed
+  with it fitted.

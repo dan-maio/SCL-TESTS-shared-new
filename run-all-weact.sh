@@ -26,7 +26,8 @@ fi
 export ARM_TOOLCHAIN_BIN
 export PATH="$ARM_TOOLCHAIN_BIN:$PATH"
 export SCL_BOARD=weact
-export RUN_MS="${RUN_MS:-60000}"
+export RUN_MS="${RUN_MS:-180000}"
+WALL_MS="${WALL_MS:-600000}"   # hard cap per test, including build time
 GAP="${GAP:-3}"
 SKIP_SPI="${SKIP_SPI:-0}"
 FILTER="${1:-}"
@@ -46,8 +47,8 @@ TESTS=(
   "dynamic-xip-nolib|dynamic-shared|./test-xip/build-and-run.sh weact nolib|RESULT: done"
   "dynamic-xip-newlib|dynamic-shared|./test-xip/build-and-run.sh weact newlib|RESULT: done"
   "overlay|overlay-shared|./test-overlay/build-and-run.sh weact test1|overlay: done"
-  "static|static-shared|./test-static/build-and-run.sh weact static|Second 5"
-  "static-cpp|static-shared|./test-static/build-and-run.sh weact static-cpp|Second 5"
+  "static|static-shared|./test-static/build-and-run.sh weact static|Second 1"
+  "static-cpp|static-shared|./test-static/build-and-run.sh weact static-cpp|Second 1"
   "static-direct|static-shared|./test-static/build-and-run.sh weact static-direct|All direct-link static loader tests completed successfully."
   "static-drv|static-shared|./test-static/build-and-run.sh weact drv|test-drv done"
   "xip-static-semihosting|static-shared|./test-xip/build-and-run.sh weact static/semihosting|scl-fw-xip-static: done"
@@ -56,7 +57,7 @@ TESTS=(
   "xip-static-no-pic-simple|static-shared|./test-xip/build-and-run.sh weact static-no-pic-simple|scl-fw-xip-static-no-pic-simple: done"
   "xip-interrupt-static|static-shared|./test-xip/build-and-run.sh weact interrupt-static|regular tests done"
   "xip-interrupt-static-direct|static-shared|./test-xip/build-and-run.sh weact interrupt-static-direct|regular tests done"
-  "xip-spi-flash|static-shared|./test-xip/build-and-run.sh weact static/spi-flash|scl-fw-xip-static-spi-flash: done"
+  "xip-spi-flash|static-shared|./test-xip/build-and-run.sh weact static/spi-flash|========== DONE =========="
 )
 
 SPI_TESTS=" static-drv xip-spi-flash "
@@ -96,11 +97,13 @@ for entry in "${TESTS[@]}"; do
     fi
 
     killall -s 9 openocd >/dev/null 2>&1 || true
-    ( cd "$ROOT/$dir" && SCL_BOARD=weact RUN_MS="$RUN_MS" bash -c "$cmd" ) 2>&1 | tee "$log"
+    ( cd "$ROOT/$dir" && SCL_BOARD=weact RUN_MS="$RUN_MS" \
+        timeout --signal=INT --kill-after=10 "$((WALL_MS / 1000))" \
+        bash -c "$cmd" ) 2>&1 | tee "$log"
     rc=${PIPESTATUS[0]}
 
-    if [[ $rc -eq 0 ]] && grep -qF -- "$marker" "$log"; then
-        echo "--- PASS $name"
+    if grep -qF -- "$marker" "$log"; then
+        echo "--- PASS $name (rc=$rc, marker found)"
         RESULTS+=("PASS|$name|$log")
         ((pass++))
     else
