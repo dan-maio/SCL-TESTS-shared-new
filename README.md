@@ -40,11 +40,22 @@ commands have QEMU results; `overlay-shared` and `static-shared` have none.
 The dynamic test still uses the retained build-time `gen-symtab` flow, which
 confirms the host tools and the new loader sources work together.
 
+## Status by board
+
+| Board | Suite | Tests | Result (2026-10-30) | Loader |
+|---|---|---|---|---|
+| WeAct F411CE + W25Q64 | suites + `api-shared/` | 22 | all pass | `380161e`, 5 re-run at `b05616a` |
+| Pi-Zero RP2350B + PSRAM | `pico2-pizero-shared/` | 66 | all pass, in one run | `380161e` |
+
+The Pi-Zero has not run since `b05616a`, which changed `scl::static` addend handling.
+The NUCLEO board has not been validated.
+
 ## WeAct F411CE status (verified)
 
-All 22 tests passed on the WeAct F411CE with the W25Q64 fitted (2026-10-30), in one
-`./run-all-weact.sh` run from clean builds with `RUN_MS=180000`, against
-SCL-shared-new `ab7737d`:
+One `./run-all-weact.sh` run from clean builds, with `RUN_MS=180000`, at `380161e`: 21 of 22
+passed. `static-cpp` failed because `patch_shlib()` runs twice in that test and an addend
+was applied twice. After the fix (`b05616a`), `static`, `static-cpp`, `static-direct`,
+`static-drv` and `api-static-boot-table` were re-run and passed.
 
 | Group | Tests | Result |
 |---|---|---|
@@ -61,17 +72,18 @@ A test passes when its completion marker appears and no failure pattern
 ignored, because it returns 1 after a clean `shutdown` on this probe.
 `xip-spi-flash` and `static-drv` exercise the W25Q64.
 
-A marker shows the firmware reached its end; only the `api-*` tests check all their
-own values. `[ERROR]` lines in a passing log are not always faults. In `static`,
-`static-cpp` and `static-direct`, `load_bin ... buffer has` comes from a bounds test
-that expects the error. `static-drv` logs `missing relocation/dynsym/dynstr data`
-four times; `libspi.so`, `libuart.so` and `libled.so` have no `.rel.dyn`, which fits
-the message, and the run completes.
+A marker shows the firmware reached its end; only the `api-*` tests check all their own
+values. The `load_bin ... buffer has` error in `static`, `static-cpp` and `static-direct`
+comes from a bounds test that expects it. `static-drv` no longer logs
+`missing relocation/dynsym/dynstr data`: its libraries had only `.rel.plt`, which the loader
+was skipping, leaving their imports unpatched.
 
 ## Pi-Zero RP2350B status (verified)
 
 All 66 SMP loader tests, 58 of them using the shared fixtures, passed on the board in one
-full run (2026-10-30). See `pico2-pizero-shared/README.md`.
+full run at `380161e`. They cover every loader, in SRAM, PSRAM and flash as each allows, C++
+exceptions, per-core interrupts and missing-import reporting. See
+`pico2-pizero-shared/README.md`, and `docs/LOADER-CHOICE.md` for what it means when choosing.
 
 ## Run
 
@@ -150,7 +162,7 @@ cd .. && git add SCL-shared && git commit -m "bump SCL-shared-new"
 
 - `scl::common` now includes `symtab-runtime.cpp`, `port/os-hooks.c` and
   `port/cache.c`, so suites linking it build them. `scl::static` on its own
-  links only the two `port/` files.
+  links those three too.
 - The original tests run through the new lock and cache calls with their weak
   defaults: the lock hooks are no-ops and the cache hooks are barriers only. Every
   loader now makes both calls.
@@ -174,8 +186,8 @@ cd .. && git add SCL-shared && git commit -m "bump SCL-shared-new"
 
 ## Notes
 
-- All 18 runner tests have been executed on the WeAct board. The NUCLEO board
-  has not been validated.
+- `scl::common` and `scl::static` changed behaviour since `SCL-shared`: see
+  `SCL-shared/docs/IMPLEMENTED-PROPOSALS.md`.
 - `scl::static` standalone targets now link `src/port/os-hooks.c`,
   `src/port/cache.c` and `src/symtab-runtime.cpp`.
 - The SPI tests (`static-drv`, `xip-spi-flash`) require the W25Q64; both passed

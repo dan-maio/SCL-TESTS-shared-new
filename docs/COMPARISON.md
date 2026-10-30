@@ -158,3 +158,41 @@ Three loaders, three calling conventions, one philosophy: **a tiny, readable
 flags) and exercises it end-to-end. Pick the loader whose calling style matches
 your firmware: `dlopen` (dynamic), call-by-name (static), or kernel-module-style
 objects (relocatable).
+
+## Dual-core: the Pi-Zero RP2350B results
+
+`pico2-pizero-shared/` in `SCL-TESTS-shared-new` runs these loaders on a Pi-Zero RP2350B
+(2x Cortex-M33, 16 MB flash, 8 MB PSRAM) under the µOS++ SMP kernel. Every load and patch
+happens on core 0 at boot, with core 1 still in the bootrom. Only then does SMP start,
+and both cores just call the modules.
+
+| Loader | Code can run from | Loader code at call time | Real C++ throws |
+|---|---|---|---|
+| `scl::reloc` | SRAM, PSRAM | none | not supported |
+| `scl::static` | SRAM, PSRAM | none | not supported |
+| `scl::optimal` | SRAM, PSRAM | none | not supported |
+| `scl::overlay` | SRAM, PSRAM | none; swap only at boot | not tested |
+| `scl::dynamic-newlib` | SRAM (heap) | none | not supported |
+| `scl::dynamic-nolib` | SRAM, PSRAM | every call into main or another module | yes |
+| `scl::xip-dynamic-newlib` | flash | every call into main or another module | yes |
+| `scl::xip-dynamic-nolib` | flash | every call into main or another module | yes |
+| `scl::xip-static` | flash | calls between modules only | yes |
+
+So if no loader code may run once SMP has started, choose from the first five. The `r10`
+models need a real recursive `scl_loader_lock`, because their call-time lookup takes it.
+
+Rules these results depend on:
+
+- **Load after static constructors,** from a wrapped `main()` for example. SCL's globals are
+  C++ objects, so an earlier load is wiped when they are constructed.
+- **Call `first_missing_import()` after loading the set.** A missing import does not fail
+  the load, because a later module may provide it. Otherwise the first call faults.
+- **Pass `flash_base` to `patch_main_imports()` or `bind_host_imports()`** when a flash
+  module uses exceptions. Catch tables read the data segment's flash copy.
+- **Hold a lock for exceptions.** This toolchain's `libstdc++` is `Thread model: single`,
+  so one global exception state is shared. Throwing on both cores at once is untested.
+- **Link the full `libsupc++`** when using `--specs=nano.specs`, whose `__cxa_throw` has no
+  unwind tables, and keep `.ARM.exidx` as its own output section so `ld` sorts it.
+- **Do not rely on `LDREX`/`STREX` across cores** on this chip. Import a lock from main.
+- **An interrupt can enter a module** if it saves and restores `r10` around the call, on
+  every model tested. Do not call a function that takes a blocking RTOS mutex from an ISR.

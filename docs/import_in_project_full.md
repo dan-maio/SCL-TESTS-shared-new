@@ -22,6 +22,13 @@ flags and the findings from the verified `float-*`, `spifs-*` and
 > libgcc helper (`__aeabi_d2f`) that a loaded `.so` cannot bind — keep fixtures on
 > `float` (`logf`, `sinf`, …), never `double`.
 
+> **Other boards and newer APIs.** The steps below are written for the WeAct F411CE. For a
+> dual-core board, see "Dual-core: the Pi-Zero RP2350B results" in `LOADER-CHOICE.md`, and
+> `../pico2-pizero-shared/` for working builds with `-mcpu=cortex-m33 -mfpu=fpv5-sp-d16`. On
+> any board, a non-PIE firmware can supply main's symbols with `dl_set_symtab()`,
+> `set_symtab()`, `set_main_symbols()` or `add_entries()` (`SCL-shared/docs/BOOT-SYMTAB.md`),
+> and should call `first_missing_import()` after loading the set.
+
 Target board throughout: **WeAct F411CE (BlackPill)** (also QEMU `netduinoplus2`
 for the models that don't need real SPI).
 

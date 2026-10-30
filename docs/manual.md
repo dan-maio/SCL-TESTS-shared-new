@@ -1,8 +1,10 @@
 # SCL-TESTS-shared — Test Manual
 
-> **SCL-TESTS-shared-new:** this manual was written for `SCL-TESTS-shared` and
-> still applies to the suites here. The new tree's submodule, runner, status and
-> known issues are in `../README.md` and `SCL-SHARED-NEW.md`.
+> **SCL-TESTS-shared-new:** this manual was written for `SCL-TESTS-shared` and still applies
+> to the WeAct and QEMU suites here. The new tree's submodule, runner and status are in
+> `../README.md` and `SCL-SHARED-NEW.md`. Two suites are newer than this manual:
+> `../api-shared/README.md` (new APIs, on WeAct) and `../pico2-pizero-shared/README.md`
+> (the Pi-Zero RP2350B under µOS++ SMP).
 
 **Version:** documents the current `SCL-TESTS-shared` tree: five test suites
 (`dynamic-shared`, `static-shared`, `optimal-shared`, `overlay-shared`,

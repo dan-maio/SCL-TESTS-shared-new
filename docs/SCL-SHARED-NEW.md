@@ -53,8 +53,9 @@ compatible with SCL-shared-new.
 
 ## WeAct F411CE validation
 
-All 22 tests passed on the WeAct F411CE with the W25Q64 fitted (2026-10-30), in one
-`run-all-weact.sh` run from clean builds (`RUN_MS=180000`), against `ab7737d`:
+One `run-all-weact.sh` run from clean builds (`RUN_MS=180000`) at `380161e`: 21 of 22 passed.
+`static-cpp` failed on a double-applied addend, fixed in `b05616a`, after which the five
+tests it could affect were re-run and passed:
 
 | Group | Result |
 |---|---|
@@ -95,13 +96,17 @@ git add SCL-shared
 git commit -m "bump SCL-shared-new"
 ```
 
+## Pi-Zero RP2350B validation
+
+`pico2-pizero-shared/` runs 66 tests under the µOS++ SMP kernel, all passing in one run at
+`380161e`: every loader, on the shared fixtures, with C++ exceptions and an interrupt on each
+core. It found most of the loader fixes since `ab7737d`. The suite's README lists them.
+
 ## Next steps
 
+- Re-run `pico2-pizero-shared/` at `b05616a`.
 - NUCLEO-F411RE hardware validation (the suites support `SCL_BOARD=nucleo`).
-- Cache overrides on a Cortex-M7. `pico2-pizero-shared/` covers SMP and the
-  RP2350's XIP cache.
-- Re-run the WeAct suite at `20c30b3`: `36ac5e6` made `_DYNAMIC` weak, and `20c30b3` changed
-  `dlopen_source`.
-- Report a missing import at load when cross-call is on; today it faults at `PC=0`
-  when called.
-- Move `SCL-EXAMPLES-shared-new` to `20c30b3`.
+- Cache overrides on a Cortex-M7. `pico2-pizero-shared/` covers SMP and the RP2350's XIP
+  cache.
+- RP2350 versions of the driver fixtures (`libspi`, `libled`, `libuart`).
+- Real C++ throws on `scl::dynamic-newlib`, `scl::static`, `scl::reloc` and `scl::optimal`.

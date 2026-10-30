@@ -138,7 +138,9 @@ results there.
 ## Status
 
 One full run of all 66 tests passed on the board (2026-10-30), against SCL-shared-new
-`08bf69f` plus the `first_missing_import()` change, committed as `380161e`.
+`380161e`. `b05616a` then fixed a double-applied addend found on the WeAct board, in
+`scl::static`. This suite has not run at that commit; its `scl-fix3-*`, `scl-fix4-static-sram`,
+`scl-fix5-static-*` and `scl-neg-static` tests are the ones to re-run.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.
 
@@ -147,9 +149,10 @@ between tests.
 
 ## What the board showed
 
-- **A flash module's imports must not use a PLT.** A PLT reads a GOT in flash, which
-  the loader cannot patch: the load succeeded, and the first import call hung. Build
-  the PIC module with `-mlong-calls`, so imports go through the RAM GOT via `r10`.
+- **A PLT in a flash module reads a GOT in flash,** which the loader cannot patch: the load
+  succeeded, and the first import call hung. Either prelink the image before programming it,
+  as the `scl-fix*` XIP tests do, or build with `-mlong-calls`, as `smpmod` does, so imports
+  go through the RAM GOT via `r10`.
 - **`scl::static` ignored `.rel.plt` when `.rel.dyn` was missing.** The load reported
   success with every import unpatched, and the first import call jumped to the PLT
   stub's offset. Libraries from the default linker script have only `.rel.plt`. This is
@@ -169,7 +172,7 @@ between tests.
 - **Exceptions are not safe on two cores at once.** libstdc++ here is `Thread model: single`,
   with one global exception state, so these tests throw under main's lock.
 - **`scl::static` had three more bugs.** `R_ARM_ABS32` dropped the addend, so a typeinfo's
-  vptr was 8 bytes off. `R_ARM_REL32` was overwritten with an absolute address. Exports
+  vptr was 8 bytes off (applied once only since `b05616a`, because `patch_shlib()` can run twice). `R_ARM_REL32` was overwritten with an absolute address. Exports
   with no relocation in their own library were never published.
 - **`scl::reloc` rejected exception-enabled objects.** It now accepts `R_ARM_PREL31`,
   `R_ARM_TARGET2` and `R_ARM_NONE`. It still registers no unwind tables.
