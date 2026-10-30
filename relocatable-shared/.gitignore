@@ -1,0 +1,11 @@
+build/
+build_*/
+build-*/
+test-relocatable/build/
+test-relocatable/fixtures-reloc/build/
+*.o
+*.elf
+*.hex
+*.bin
+*.rel.o
+__pycache__/

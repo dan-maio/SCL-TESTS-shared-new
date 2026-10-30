@@ -1,0 +1,15 @@
+build/
+fixtures/*.so
+fixtures/*.ld
+fixtures/manifest.txt
+fixtures/link.txt
+test/common/imports.generated.h
+test/common/modules.generated.inc
+/tools/gen-imports
+fixtures/windows.generated.ld
+examples/floatapp/build/
+examples/floatapp/fixtures/floatlib.so
+examples/floatapp/fixtures/floatlib.ld
+examples/floatapp/fixtures/windows.generated.ld
+examples/floatapp/fixtures/manifest.txt
+examples/floatapp/fixtures/link.txt

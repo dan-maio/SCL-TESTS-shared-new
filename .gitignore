@@ -1,0 +1,9 @@
+# build trees
+**/build/
+build/
+# generated fixtures / vendored outputs
+**/fixtures/build/
+**/*.generated.h
+**/*.generated.inc
+# host tool binary
+**/gen-imports

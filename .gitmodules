@@ -1,0 +1,3 @@
+[submodule "SCL-shared"]
+	path = SCL-shared
+	url = /home/dan/Downloads/GIT/SCL-shared-new.git
