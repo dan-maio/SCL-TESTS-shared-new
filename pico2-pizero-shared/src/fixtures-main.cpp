@@ -4,6 +4,9 @@
  *
  * TEST_GROUP 1 loads cpp3, c2, c1, mylib1. TEST_GROUP 2 loads libprov, libcons, mylib2.
  * TEST_GROUP 3 adds mylib1 to group 2, for scl::static, which has no cyclic imports.
+ * TEST_GROUP 4 loads libcppeh, ehx_catch, libcppsh: C++ exceptions, RTTI and virtuals.
+ * TEST_EH_THROW really throws; other loaders register no unwind tables, so they make
+ * only the non-throwing calls, as the WeAct dynamic-newlib test does.
  *
  * Same rule as main.cpp: load and patch on core 0, at boot, then start SMP. As on the
  * WeAct board the fixtures are read from the host over semihosting. For XIP they are
@@ -53,6 +56,14 @@ namespace xipl = xip::newlib;
 #elif defined(TEST_LOADER_STATIC)
 #include "elf-reader.h"
 #include "module.h"
+#endif
+
+#if TEST_GROUP == 4
+#include "cross-error.hpp"
+#include <cxxabi.h>
+#include <exception>
+#include <new>
+#include <typeinfo>
 #endif
 
 #include <cmath>
@@ -135,19 +146,27 @@ inline void spin_give(u32 reg) {
     *reinterpret_cast<volatile u32*>(reg) = 1;
 }
 u32 g_app_pm[2];
+unsigned g_app_depth[2];
 }  // namespace
 
 // ---- what the fixtures import from main ----------------------------------------
 extern "C" {
+/* Recursive: a fixture called under the lock may allocate, and malloc takes it too. */
 void app_lock(void) {
     const u32 pm = irq_off();
-    spin_take(kAppLock);
-    g_app_pm[port_cpu_id() & 1u] = pm;
+    const unsigned me = port_cpu_id() & 1u;
+    if (g_app_depth[me]++ == 0) {
+        spin_take(kAppLock);
+        g_app_pm[me] = pm;
+    }
 }
 void app_unlock(void) {
-    const u32 pm = g_app_pm[port_cpu_id() & 1u];
-    spin_give(kAppLock);
-    irq_restore(pm);
+    const unsigned me = port_cpu_id() & 1u;
+    if (--g_app_depth[me] == 0) {
+        const u32 pm = g_app_pm[me];
+        spin_give(kAppLock);
+        irq_restore(pm);
+    }
 }
 
 /* The fixtures trace on every call. Printed during the load and the walkthroughs, and
@@ -256,6 +275,24 @@ void scl_log_puts(const char* s) { uart::write(s); }
 void scl_log_putc(char c) { uart::write(&c, 1); }
 }  // extern "C"
 
+#if TEST_GROUP == 4
+extern "C" {
+void* __cxa_allocate_exception(unsigned);
+void __cxa_throw(void*, void*, void (*)(void*));
+void* __cxa_begin_catch(void*);
+void __cxa_end_catch();
+void __cxa_end_cleanup();
+int __gxx_personality_v0();
+void __aeabi_unwind_cpp_pr0();
+void __aeabi_unwind_cpp_pr1();
+void* __dynamic_cast(const void*, const void*, const void*, int);
+void __cxa_pure_virtual();
+extern char _ZTVN10__cxxabiv117__class_type_infoE[], _ZTVN10__cxxabiv120__si_class_type_infoE[];
+void* locked_new_nothrow(unsigned n, const std::nothrow_t&) { return locked_malloc(n); }
+void locked_delete_nothrow(void* p, const std::nothrow_t&) { locked_free(p); }
+}
+#endif
+
 namespace {
 
 #define SYM(n, p) {n, reinterpret_cast<u32>(p)}
@@ -269,6 +306,17 @@ const scl_sym_entry kMainSyms[] = {
     SYM("AA", &AA), SYM("BB", &BB), SYM("s1", &s1), SYM("f", &f), SYM("w", &w),
     SYM("printf", &fixture_printf), SYM("puts", &fixture_puts), SYM("strcat", &strcat), SYM("strlen", &strlen),
     SYM("log", &fixture_log), SYM("__aeabi_d2f", &__aeabi_d2f), SYM("__aeabi_f2d", &__aeabi_f2d),
+#if TEST_GROUP == 4
+    SYM("__cxa_allocate_exception", &__cxa_allocate_exception), SYM("__cxa_throw", &__cxa_throw),
+    SYM("__cxa_begin_catch", &__cxa_begin_catch), SYM("__cxa_end_catch", &__cxa_end_catch),
+    SYM("__cxa_end_cleanup", &__cxa_end_cleanup), SYM("__gxx_personality_v0", &__gxx_personality_v0),
+    SYM("__aeabi_unwind_cpp_pr0", &__aeabi_unwind_cpp_pr0), SYM("__aeabi_unwind_cpp_pr1", &__aeabi_unwind_cpp_pr1),
+    SYM("__dynamic_cast", &__dynamic_cast), SYM("__cxa_pure_virtual", &__cxa_pure_virtual),
+    SYM("_ZTVN10__cxxabiv117__class_type_infoE", &_ZTVN10__cxxabiv117__class_type_infoE),
+    SYM("_ZTVN10__cxxabiv120__si_class_type_infoE", &_ZTVN10__cxxabiv120__si_class_type_infoE),
+    SYM("_ZSt7nothrow", &std::nothrow), SYM("_ZnwjRKSt9nothrow_t", &locked_new_nothrow),
+    SYM("_ZdlPvRKSt9nothrow_t", &locked_delete_nothrow),
+#endif
 };
 constexpr std::size_t kNumSyms = sizeof kMainSyms / sizeof kMainSyms[0];
 
@@ -279,6 +327,8 @@ struct Fixtures {
 #if TEST_GROUP == 1
     Fn cpp3_method, cpp3_recurse, cpp3_float_cross, cpp3_heap, c2_add, c2_param, c2_state,
         c1_call_c2, c1_use_fm, c1_state, library_function, retstr;
+#elif TEST_GROUP == 4
+    Fn eh_selftest, eh_throw, eh_dyncast, ehx_catch_cross, cppsh_make, cppsh_compute, cppsh_instances, cppsh_free;
 #else
     Fn prov_value, cons_call, lf, lf2, lf3, xxx;
 #if TEST_GROUP == 3
@@ -287,11 +337,18 @@ struct Fixtures {
 #endif
 } g_fx;
 
+#if TEST_GROUP == 4
+}  // namespace
+/* In embed-arena.S: an exception unwinds through it, so it carries unwind info. */
+extern "C" u32 call_mod(fn2, u32 /*got*/, u32 /*a*/, u32 /*b*/);
+namespace {
+#else
 __attribute__((naked)) u32 call_mod(fn2, u32 /*got*/, u32 /*a*/, u32 /*b*/) {
     __asm__ volatile(
         "push {r10, lr}\n mov r10, r1\n mov r12, r0\n"
         "mov r0, r2\n mov r1, r3\n blx r12\n pop {r10, pc}\n");
 }
+#endif
 inline u32 call(const Fn& f, u32 a = 0, u32 b = 0) { return call_mod(f.f, f.got, a, b); }
 
 const char* g_boot_error = "boot_load did not run";
@@ -302,6 +359,9 @@ constexpr std::size_t kStageEach = 32 * 1024;
 #if TEST_GROUP == 1
 constexpr int kCount = 4, kSetCount = 3;
 const char* const kNames[kCount] = {"cpp3", "c2", "c1", "mylib1"};
+#elif TEST_GROUP == 4
+constexpr int kCount = 3, kSetCount = 2;
+const char* const kNames[kCount] = {"libcppeh", "ehx_catch", "libcppsh"};
 #elif TEST_GROUP == 2
 constexpr int kCount = 3, kSetCount = 2;
 const char* const kNames[kCount] = {"libprov", "libcons", "mylib2"};
@@ -365,9 +425,9 @@ bool provision_flash() {
     for (int i = 0; i < kCount; ++i) {
         std::span<std::byte> img{g_stage[i], g_size[i]};
 #if defined(TEST_XIP_STATIC)
-        xip::stat::bind_host_imports(img);
+        xip::stat::bind_host_imports(img, kXipBase + off);
 #else
-        xipl::patch_main_imports(img);
+        xipl::patch_main_imports(img, kXipBase + off);
 #endif
         const u32 pm = irq_off();
         flash_write_ram(off, reinterpret_cast<const std::uint8_t*>(img.data()), img.size());
@@ -416,6 +476,9 @@ bool load_fixtures() {
     GET(cpp3_heap, cluster); GET(c2_add, cluster); GET(c2_param, cluster); GET(c2_state, cluster);
     GET(c1_call_c2, cluster); GET(c1_use_fm, cluster); GET(c1_state, cluster);
     GET(library_function, m1); GET(retstr, m1);
+#elif TEST_GROUP == 4
+    GET(eh_selftest, cluster); GET(eh_throw, cluster); GET(eh_dyncast, cluster); GET(ehx_catch_cross, cluster);
+    GET(cppsh_make, m1); GET(cppsh_compute, m1); GET(cppsh_instances, m1); GET(cppsh_free, m1);
 #else
     GET(prov_value, cluster); GET(cons_call, cluster);
     GET(lf, m1); GET(lf2, m1); GET(lf3, m1); GET(xxx, m1);
@@ -442,6 +505,9 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 4
+    GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
+    GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
 #else
     GET(prov_value, 0); GET(cons_call, 1);
     GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
@@ -467,6 +533,9 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 4
+    GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
+    GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
 #else
     GET(prov_value, 0); GET(cons_call, 1);
     GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
@@ -492,6 +561,9 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 4
+    GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
+    GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
 #else
     GET(prov_value, 0); GET(cons_call, 1);
     GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
@@ -509,9 +581,14 @@ bool load_fixtures() {
         }
     }
 #define GET(field, i) ok = ok && set(g_fx.field, h[i].sym<fn2>(#field), 0, "missing " #field)
+#if TEST_GROUP == 4
+    GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
+    GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
+#else
     GET(prov_value, 0); GET(cons_call, 1);
     GET(library_function, 2); GET(retstr, 2);
     GET(lf, 3); GET(lf2, 3); GET(lf3, 3); GET(xxx, 3);
+#endif
 #elif defined(TEST_LOADER_XIP)
     xipl::set_symtab(kMainSyms, kNumSyms);
     if (!provision_flash()) return false;
@@ -540,6 +617,9 @@ bool load_fixtures() {
     GET(c2_add, 1); GET(c2_param, 1); GET(c2_state, 1);
     GET(c1_call_c2, 2); GET(c1_use_fm, 2); GET(c1_state, 2);
     GET(library_function, 3); GET(retstr, 3);
+#elif TEST_GROUP == 4
+    GET(eh_selftest, 0); GET(eh_throw, 0); GET(eh_dyncast, 0); GET(ehx_catch_cross, 1);
+    GET(cppsh_make, 2); GET(cppsh_compute, 2); GET(cppsh_instances, 2); GET(cppsh_free, 2);
 #else
     GET(prov_value, 0); GET(cons_call, 1);
     GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
@@ -549,11 +629,26 @@ bool load_fixtures() {
 }
 
 constexpr unsigned kGold = 16;
-u32 g_gold[kGold], g_hits_base, g_c1_base;
+u32 g_gold[kGold], g_hits_base, g_c1_base, g_widget_gold;
+
+#if TEST_GROUP == 4
+[[noreturn]] void on_terminate() {
+    say("  FAIL: std::terminate");
+    const std::type_info* t = abi::__cxa_current_exception_type();
+    say(t ? ", exception in flight: " : ", no exception in flight");
+    if (t) say(t->name());
+    say("\nRESULT: FAIL\n");
+    hw_result::fail();
+    for (;;) {}
+}
+#endif
 
 /* Boot time: core 1 is still in the bootrom and the kernel's main() has not run. */
 void boot_load() {
     g_boot_cpu = port_cpu_id();
+#if TEST_GROUP == 4
+    std::set_terminate(on_terminate);
+#endif
     if (!read_fixtures()) return;
 #if defined(TEST_PSRAM) && !defined(TEST_LOADER_XIP)
     if (!psram::init()) { g_boot_error = "psram::init"; return; }
@@ -563,6 +658,9 @@ void boot_load() {
 #if TEST_GROUP == 1
     g_text_addr = reinterpret_cast<u32>(g_fx.cpp3_method.f);
     g_data_got = g_fx.cpp3_method.got;
+#elif TEST_GROUP == 4
+    g_text_addr = reinterpret_cast<u32>(g_fx.eh_dyncast.f);
+    g_data_got = g_fx.eh_dyncast.got;
 #else
     g_text_addr = reinterpret_cast<u32>(g_fx.lf.f);
     g_data_got = g_fx.lf.got;
@@ -580,6 +678,14 @@ void boot_load() {
     }
     g_hits_base = call(g_fx.c2_state);
     g_c1_base = call(g_fx.c1_state);
+#elif TEST_GROUP == 4
+    if (call(g_fx.eh_dyncast) != 2u) { g_boot_error = "eh_dyncast"; return; }
+    if (call(g_fx.ehx_catch_cross, 0) != 0u) { g_boot_error = "ehx_catch_cross(0)"; return; }
+    {
+        const u32 w = call(g_fx.cppsh_make, 7);
+        g_widget_gold = call(g_fx.cppsh_compute, w, 5);
+        call(g_fx.cppsh_free, w);
+    }
 #else
     if (call(g_fx.prov_value, 5) != 105u) { g_boot_error = "libprov prov_value"; return; }
 #if TEST_GROUP == 3
@@ -641,6 +747,27 @@ void walkthrough(unsigned core) {
     say("\"\n");
     show("c2_state()", call(g_fx.c2_state));
     show("c1_state()", call(g_fx.c1_state));
+#elif TEST_GROUP == 4
+    show("eh_dyncast(0)", call(g_fx.eh_dyncast));
+    show("ehx_catch_cross(0)", call(g_fx.ehx_catch_cross, 0));
+#if defined(TEST_EH_THROW)
+    show("eh_selftest(1) [throw and catch inside libcppeh]", call(g_fx.eh_selftest, 1));
+    show("ehx_catch_cross(1) [throw in libcppeh, catch in ehx_catch]", call(g_fx.ehx_catch_cross, 1));
+    try {
+        call(g_fx.eh_throw, 1);
+        say("  eh_throw(1) returned instead of throwing\n");
+    } catch (const cross_error& e) {
+        show("eh_throw(1) [throw in libcppeh, catch in main], code", e.code());
+    }
+#endif
+    show("cppsh_instances()", call(g_fx.cppsh_instances));
+    {
+        const u32 w = call(g_fx.cppsh_make, 7);
+        show("cppsh_compute(w,5)", call(g_fx.cppsh_compute, w, 5));
+        show("cppsh_instances() after make", call(g_fx.cppsh_instances));
+        call(g_fx.cppsh_free, w);
+        show("cppsh_instances() after free", call(g_fx.cppsh_instances));
+    }
 #else
     show("prov_value(5)", call(g_fx.prov_value, 5));
     show("cons_call(5)", call(g_fx.cons_call, 5));
@@ -712,6 +839,37 @@ void* worker(void* arg) {
         expect(cross == 10u + 0x2200u, 7);
         expect(deep == 10u, 8);
 
+#elif TEST_GROUP == 4
+        // Concurrent on both cores: dynamic_cast and the non-throwing path.
+        expect(call(g_fx.eh_dyncast) == 2u, 1);
+        expect(call(g_fx.ehx_catch_cross, 0) == 0u, 2);
+
+        // libstdc++ here is single-threaded: exception state and cppsh's instance
+        // counter are shared, so throws and make/free hold main's lock.
+        app_lock();
+#if defined(TEST_EH_THROW)
+        const u32 self = call(g_fx.eh_selftest, 1);
+        const u32 cross = call(g_fx.ehx_catch_cross, 1);
+        u32 caught = 0;
+        try {
+            call(g_fx.eh_throw, 1);
+        } catch (const cross_error& e) {
+            caught = e.code();
+        }
+#endif
+        const u32 before = call(g_fx.cppsh_instances);
+        const u32 widget = call(g_fx.cppsh_make, 7);
+        const u32 computed = call(g_fx.cppsh_compute, widget, 5);
+        const u32 during = call(g_fx.cppsh_instances);
+        call(g_fx.cppsh_free, widget);
+        app_unlock();
+#if defined(TEST_EH_THROW)
+        expect(self == 98u, 3);
+        expect(cross == 1007u, 4);
+        expect(caught == 7u, 5);
+#endif
+        expect(computed == g_widget_gold, 6);
+        expect(during == before + 1u, 7);
 #else
         // Concurrent on both cores: results depend only on read-only state.
         expect(call(g_fx.prov_value, i) == i + 100u, 1);
@@ -749,7 +907,7 @@ void* idle1(void*) {
 int os_main(int, char*[]) {
     this_thread::thread().cpu_affinity(1u << 0);
     led::init();
-    say("\n" TEST_NAME ": WeAct fixtures loaded at boot, then SMP\n");
+    say("\n" TEST_NAME ": fixtures loaded at boot on the RP2350, then SMP\n");
 
     bool ok = true;
     auto check = [&](bool c, const char* what) {

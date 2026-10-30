@@ -175,7 +175,81 @@ foreach(pair "cpp3|cpp3/cpp3.cpp" "c2|c2/c2.c" "c1|c1/c1.c" "mylib1|mylib1/mylib
     endforeach()
     math(EXPR slot "${slot} + 1")
 endforeach()
+# The C++ exception and virtual-class fixtures, built with exceptions and RTTI on.
+set(EH_INC -I${FIX_SRC}/libcppeh/include -I${FIX_SRC}/libcppsh/include)
+set(EH_CXX -std=c++20 -fno-threadsafe-statics)
+set(slot 0)
+foreach(pair "libcppeh|libcppeh/src/cppeh.cpp" "ehx_catch|ehx/ehx-catch.cpp"
+             "libcppsh|libcppsh/src/cppsh-api.cpp;libcppsh/src/widget.cpp")
+    string(FIND "${pair}" "|" bar)
+    string(SUBSTRING "${pair}" 0 ${bar} n)
+    math(EXPR bar "${bar} + 1")
+    string(SUBSTRING "${pair}" ${bar} -1 rel)
+    set(srcs "")
+    foreach(r IN LISTS rel)
+        list(APPEND srcs "${FIX_SRC}/${r}")
+    endforeach()
+    set(objs "")
+    foreach(s IN LISTS srcs)
+        get_filename_component(b "${s}" NAME_WE)
+        set(o "${FIX_DIR}/eh-${n}-${b}.o")
+        add_custom_command(OUTPUT "${o}"
+            COMMAND ${CMAKE_CXX_COMPILER} ${MCU} -mlong-calls -fno-pic -Os ${EH_CXX} ${EH_INC} -c "${s}" -o "${o}"
+            DEPENDS "${s}" VERBATIM)
+        list(APPEND objs "${o}")
+    endforeach()
+    add_custom_command(OUTPUT "${FIX_DIR}/${n}.rel.o"
+        COMMAND ${CMAKE_LINKER} -r ${objs} -o "${FIX_DIR}/${n}.rel.o"
+        DEPENDS ${objs} VERBATIM)
+    add_custom_command(OUTPUT "${FIX_DIR}/${n}.so"
+        COMMAND ${CMAKE_CXX_COMPILER} ${MCU} -fpic -msingle-pic-base -mpic-register=r10
+                -mno-pic-data-is-text-relative -O0 ${EH_CXX} ${EH_INC} -shared -nostartfiles -nostdlib
+                -nodefaultlibs -Wl,-E -Wl,-Bsymbolic
+                -T "${CMAKE_CURRENT_SOURCE_DIR}/../dynamic-shared/test-xip/fixtures-src/ldscripts/xip-split.ld"
+                ${srcs} -o "${FIX_DIR}/${n}.so"
+        DEPENDS ${srcs} VERBATIM)
+    add_custom_command(OUTPUT "${FIX_DIR}/${n}.pic.so"
+        COMMAND ${CMAKE_CXX_COMPILER} ${MCU} -fPIC -O0 ${EH_CXX} ${EH_INC} -shared -nostartfiles -nostdlib
+                -nodefaultlibs -Wl,-E ${srcs} -o "${FIX_DIR}/${n}.pic.so"
+        DEPENDS ${srcs} VERBATIM)
+    list(APPEND FIX_FILES "${FIX_DIR}/${n}.rel.o" "${FIX_DIR}/${n}.so" "${FIX_DIR}/${n}.pic.so")
+    foreach(mem IN ITEMS sram psram)
+        math(EXPR tb "${WIN_${mem}_TEXT} + ${slot} * 0x1000" OUTPUT_FORMAT HEXADECIMAL)
+        math(EXPR db "${WIN_${mem}_DATA} + ${slot} * 0x1000" OUTPUT_FORMAT HEXADECIMAL)
+        set(out "${FIX_DIR}/${n}.opt-${mem}.so")
+        add_custom_command(OUTPUT "${out}"
+            COMMAND sed -e "s/__TEXT_BASE__/${tb}/g" -e "s/__DATA_BASE__/${db}/g"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../optimal-shared/fixtures-src/ldscripts/nopic-split.ld"
+                    > "${out}.ld"
+            COMMAND ${CMAKE_CXX_COMPILER} ${MCU} -fno-pic -mlong-calls -O0 ${EH_CXX} ${EH_INC} -shared
+                    -nostartfiles -nostdlib -nodefaultlibs -Wl,-E -Wl,-z,max-page-size=0x100
+                    -Wl,--unresolved-symbols=ignore-all -T "${out}.ld" ${srcs} -o "${out}"
+            DEPENDS ${srcs})
+        list(APPEND FIX_FILES "${out}")
+    endforeach()
+    math(EXPR slot "${slot} + 1")
+endforeach()
 add_custom_target(scl-fix-modules DEPENDS ${FIX_FILES})
+
+# Exceptions need main's unwind table sorted, and ld only sorts it as its own output
+# section. The board's script folds it into .text, so these tests get a derived script.
+file(READ "${UOS_PORT_DIR}/test/pico2-pizero/psram-mat-test-250/psram-sram-boot.ld" BOOT_LD)
+set(EH_LD "${BOOT_LD}")
+string(REGEX REPLACE "[ \t]*__exidx_start = \\.;[^\n]*\n" "" EH_LD "${EH_LD}")
+string(REGEX REPLACE "[ \t]*\\*\\(\\.ARM\\.exidx[^\n]*\n" "" EH_LD "${EH_LD}")
+string(REGEX REPLACE "[ \t]*__exidx_end = \\.;[^\n]*\n" "" EH_LD "${EH_LD}")
+string(REGEX REPLACE "([ \t]*\\.preinit_array : ALIGN)"
+"    .ARM.exidx : {
+        __exidx_start = .;
+        *(.ARM.exidx* .gnu.linkonce.armexidx.*)
+        __exidx_end = .;
+    } > FLASH
+
+\\1" EH_LD "${EH_LD}")
+file(WRITE "${CMAKE_BINARY_DIR}/eh-boot.ld" "${EH_LD}")
+
+# Only the test's own source catches exceptions; the kernel and board stay as built.
+set_source_files_properties(src/fixtures-main.cpp PROPERTIES COMPILE_OPTIONS "-fexceptions;-frtti")
 
 # name  loader-define  scl-target  extension  arena-section  text MSB  psram  iterations
 function(scl_fix_test name loader target ext section top psram iters)
@@ -195,6 +269,12 @@ function(scl_fix_test name loader target ext section top psram iters)
     if("GROUP3" IN_LIST ARGN)
         set(group 3)
     endif()
+    if("GROUP4" IN_LIST ARGN)
+        set(group 4)
+        if("THROW" IN_LIST ARGN)
+            list(APPEND defs TEST_EH_THROW)
+        endif()
+    endif()
     list(APPEND defs TEST_GROUP=${group})
     set(srcs src/fixtures-main.cpp src/embed-arena.S ${UOS_BOARD_UART} ${UOS_BOARD_RTOS_GLUE} ${UOS_BOARD_MULTICORE})
     if(psram)
@@ -210,14 +290,27 @@ function(scl_fix_test name loader target ext section top psram iters)
     if(target STREQUAL "scl::xip-dynamic-newlib")
         list(APPEND srcs "${CMAKE_CURRENT_SOURCE_DIR}/../SCL-shared/src/image-memory.cpp")
     endif()
+    set(ld "${UOS_PORT_DIR}/test/pico2-pizero/psram-mat-test-250/psram-sram-boot.ld")
+    if(group EQUAL 4)
+        set(ld "${CMAKE_BINARY_DIR}/eh-boot.ld")
+    endif()
     uos_add_app("${name}-hwd"
         SOURCES ${srcs}
         NCPU ${UOS_BOARD_NCPU}
-        LINKER_SCRIPT "${UOS_PORT_DIR}/test/pico2-pizero/psram-mat-test-250/psram-sram-boot.ld"
+        LINKER_SCRIPT "${ld}"
         DEFINES ${defs}
         INCLUDES "${UOS_PORT_DIR}/test/boards/shared"
         LIBRARIES micro-os-plus::cortexm ${target})
     add_dependencies("${name}-hwd" scl-fix-modules)
+    if(group EQUAL 4)
+        # nano.specs selects libstdc++_nano, whose __cxa_throw has no unwind tables, so
+        # a throw stops at its first frame. The full libsupc++ has them.
+        execute_process(COMMAND ${CMAKE_CXX_COMPILER} ${MCU} -print-file-name=libsupc++.a
+                        OUTPUT_VARIABLE libsupcxx OUTPUT_STRIP_TRAILING_WHITESPACE)
+        target_link_libraries("${name}-hwd" PRIVATE "${libsupcxx}")
+        target_include_directories("${name}-hwd" PRIVATE "${FIX_SRC}/libcppeh/include")
+        target_compile_definitions("${name}-hwd" PRIVATE $<$<COMPILE_LANGUAGE:ASM>:TEST_EH_UNWIND>)
+    endif()
     if(loader STREQUAL "LOADER_OPTIMAL")
         if(psram)
             set(wt ${WIN_psram_TEXT})
@@ -265,13 +358,21 @@ scl_fix_test(scl-fix-xipnolib-flash        LOADER_XIP scl::xip-dynamic-nolib  .s
 scl_fix_test(scl-fix-xipnolib-flash-psram  LOADER_XIP scl::xip-dynamic-nolib  .so .psram.scl_arena 0x10 DATA 500)
 scl_fix_test(scl-fix2-xipnolib-flash        LOADER_XIP scl::xip-dynamic-nolib .so .bss.scl_arena   0x10 OFF  2000 GROUP2)
 scl_fix_test(scl-fix2-xipnolib-flash-psram  LOADER_XIP scl::xip-dynamic-nolib .so .psram.scl_arena 0x10 DATA 500  GROUP2)
+scl_fix_test(scl-fix4-nolib-sram      LOADER_NOLIB scl::dynamic-nolib       .so .bss.scl_arena   0x20 OFF  500 GROUP4 THROW)
+scl_fix_test(scl-fix4-nolib-psram     LOADER_NOLIB scl::dynamic-nolib       .so .psram.scl_arena 0x11 ON   100 GROUP4 THROW)
+scl_fix_test(scl-fix4-xip-flash       LOADER_XIP   scl::xip-dynamic-newlib  .so .bss.scl_arena   0x10 OFF  200 GROUP4 THROW)
+scl_fix_test(scl-fix4-xipstatic-flash LOADER_XIP   scl::xip-static          .so .bss.scl_arena   0x10 OFF  200 GROUP4 THROW)
+scl_fix_test(scl-fix4-xipnolib-flash  LOADER_XIP   scl::xip-dynamic-nolib   .so .bss.scl_arena   0x10 OFF  200 GROUP4 THROW)
+scl_fix_test(scl-fix4-newlib-sram     LOADER_NEWLIB scl::dynamic-newlib     .pic.so .bss.scl_arena 0x20 OFF 500 GROUP4)
+scl_fix_test(scl-fix4-static-sram     LOADER_STATIC scl::static             .pic.so .bss.scl_arena 0x20 OFF 500 GROUP4)
+scl_fix_test(scl-fix4-reloc-sram      LOADER_RELOC scl::reloc               .rel.o .bss.scl_arena  0x20 OFF 500 GROUP4)
+scl_fix_test(scl-fix4-optimal-sram    LOADER_OPTIMAL scl::optimal           .opt-sram.so .bss.scl_arena 0x20 OFF 500 GROUP4)
 
 # ---- the WeAct overlay fixtures: linked with the firmware, one shared window -------
 set(OV_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../overlay-shared/test-overlay/test1/src")
 set_source_files_properties("${OV_SRC}/ov1.c" "${OV_SRC}/ov2.c" PROPERTIES COMPILE_OPTIONS "-fno-pic;-mlong-calls")
 set_source_files_properties("${OV_SRC}/ovcpp.cpp" PROPERTIES COMPILE_OPTIONS
     "-fno-pic;-mlong-calls;-fno-exceptions;-fno-rtti;-fno-use-cxa-atexit;-fno-unwind-tables;-fno-asynchronous-unwind-tables")
-file(READ "${UOS_PORT_DIR}/test/pico2-pizero/psram-mat-test-250/psram-sram-boot.ld" BOOT_LD)
 function(scl_overlay_test name origin psram iters)
     set(ld "${BOOT_LD}")
     string(REGEX REPLACE "(PSRAM \\(rwx\\)[^\n]*\n)" "\\1    OVL   (rwx) : ORIGIN = ${origin}, LENGTH = 16K\n" ld "${ld}")

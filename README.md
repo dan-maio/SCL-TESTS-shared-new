@@ -70,7 +70,7 @@ the message, and the run completes.
 
 ## Pi-Zero RP2350B status (verified)
 
-All 30 SMP loader tests, including 22 using the WeAct fixtures, passed on the board
+All 47 SMP loader tests, including 39 using the shared fixtures, passed on the board
 in one full run (2026-10-30). See `pico2-pizero-shared/README.md`.
 
 ## Run

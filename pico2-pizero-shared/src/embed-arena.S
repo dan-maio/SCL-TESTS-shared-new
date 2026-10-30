@@ -15,3 +15,25 @@ _simage_arena_end:
     .set _sxip_data_start, SCL_WINDOW_DATA
     .set _sxip_data_end,   SCL_WINDOW_DATA + 0x8000
 #endif
+
+#if defined(TEST_EH_UNWIND)
+/* Enter a module with r10 = its GOT base. Exceptions unwind through this frame. */
+    .syntax unified
+    .thumb
+    .text
+    .global call_mod
+    .type call_mod, %function
+    .thumb_func
+call_mod:
+    .fnstart
+    push {r10, lr}
+    .save {r10, lr}
+    mov r10, r1
+    mov r12, r0
+    mov r0, r2
+    mov r1, r3
+    blx r12
+    pop {r10, pc}
+    .fnend
+    .size call_mod, . - call_mod
+#endif

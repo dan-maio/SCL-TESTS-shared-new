@@ -270,7 +270,7 @@ void* idle1(void*) {
 int os_main(int, char*[]) {
     this_thread::thread().cpu_affinity(1u << 0);
     led::init();
-    say("\n" TEST_NAME ": WeAct overlay fixtures swapped at boot, then SMP\n");
+    say("\n" TEST_NAME ": overlay fixtures swapped at boot on the RP2350, then SMP\n");
 
     bool ok = true;
     auto check = [&](bool c, const char* what) {

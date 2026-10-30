@@ -90,6 +90,20 @@ More loaders on the same fixtures, all read over semihosting at boot:
 `scl::static` skips the `c1`/`c2`/`cpp3` cycle, as the WeAct static tests do. Overlays are
 swapped only at boot: `ovcpp` stays resident and both cores call it.
 
+The `scl-fix4-*` tests load `libcppeh`, `ehx_catch` and `libcppsh`: C++ exceptions, RTTI
+and virtual classes.
+
+| Tests | Loader | Throws for real |
+|---|---|---|
+| `scl-fix4-nolib-sram`, `scl-fix4-nolib-psram` | `scl::dynamic-nolib` | yes |
+| `scl-fix4-xip-flash` | `scl::xip-dynamic-newlib` | yes |
+| `scl-fix4-xipstatic-flash` | `scl::xip-static` | yes |
+| `scl-fix4-xipnolib-flash` | `scl::xip-dynamic-nolib` | yes |
+| `scl-fix4-newlib-sram`, `scl-fix4-static-sram`, `scl-fix4-reloc-sram`, `scl-fix4-optimal-sram` | the others | no: they register no unwind tables, so only `eh_dyncast`, `ehx_catch_cross(0)` and `cppsh_*` run |
+
+The throwing tests throw and catch inside `libcppeh`, throw in `libcppeh` and catch in
+`ehx_catch` through the cross-call trampoline, and throw in `libcppeh` and catch in main.
+
 Each fixture test first prints every fixture call with its traces, on core 0 and then
 on core 1, like the WeAct apps. Traces are off for the stress loop that follows.
 
@@ -112,17 +126,13 @@ results there.
 
 ## Status
 
-One full run of all 30 tests passed on the board (2026-10-30), against SCL-shared-new
-`20c30b3` plus the `elf-reader.cpp` fix below, committed as `9696b85`. Both free workers ran on both cores in
-almost every test; `scl-fix3-static-psram` once kept one on core 0.
+One full run of all 47 tests passed on the board (2026-10-30), against SCL-shared-new
+`40eeec8` plus the loader fixes below, committed as `08bf69f`.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.
 
 The port's `hw.sh` advises one test per power cycle. These runs did not power-cycle
 between tests.
-
-The eight `xipstatic` and `xipnolib` tests were added after that run and passed in one
-run of their own, on the same loader with `set_symtab()` added to those two adapters.
 
 ## What the board showed
 
@@ -134,6 +144,24 @@ run of their own, on the same loader with `set_symtab()` added to those two adap
   stub's offset. Libraries from the default linker script have only `.rel.plt`. This is
   also what the `missing relocation/dynsym/dynstr data` lines in the WeAct `static-drv`
   logs were, so that test's behaviour changes with the fix and needs a re-run.
+- **C++ exceptions needed five separate fixes on this board.**
+  - `--specs=nano.specs` links `libstdc++_nano`, whose `__cxa_throw` has no unwind tables,
+    so a throw stops at its first frame. These tests link the full `libsupc++`.
+  - The board's linker script folds `.ARM.exidx` into `.text`, where `ld` does not sort it.
+    These tests use a derived script.
+  - The XIP adapters passed `dl_exidx_register()` its arguments in the wrong order, with a
+    count of 0, so their unwind tables were never registered. `xip::stat` had none at all.
+  - The extab personality pointer needs its Thumb bit set. In flash that must be done
+    before programming, so provisioning now does it.
+  - A catch table in flash reads the typeinfo's flash copy, which was never relocated.
+    Pass `flash_base` to `patch_main_imports()` or `bind_host_imports()` to prelink it.
+- **Exceptions are not safe on two cores at once.** libstdc++ here is `Thread model: single`,
+  with one global exception state, so these tests throw under main's lock.
+- **`scl::static` had three more bugs.** `R_ARM_ABS32` dropped the addend, so a typeinfo's
+  vptr was 8 bytes off. `R_ARM_REL32` was overwritten with an absolute address. Exports
+  with no relocation in their own library were never published.
+- **`scl::reloc` rejected exception-enabled objects.** It now accepts `R_ARM_PREL31`,
+  `R_ARM_TARGET2` and `R_ARM_NONE`. It still registers no unwind tables.
 - **`scl::xip-static` and `scl::xip-dynamic-nolib` needed a PIE main.** Both now take
   `set_symtab()`. `xip::stat` binds main's imports into the image at provision time, so
   only calls between modules do a lookup: 48000 lock acquisitions against 264000 for
@@ -158,8 +186,9 @@ run of their own, on the same loader with `set_symtab()` added to those two adap
 ## Not tested
 
 - Loading or unloading after SMP has started, which this design excludes.
-- The C++ exception fixtures (`ehx_catch`, `libcppeh`, `libcppsh`), and the STM32 driver
-  fixtures (`libspi`, `libled`, `libuart`).
+- The STM32 driver fixtures (`libspi`, `libled`, `libuart`).
+- Real throws under `scl::dynamic-newlib`, `scl::static`, `scl::reloc` and `scl::optimal`.
+- Exceptions thrown on both cores at the same moment.
 - Fixture functions that write their own state without a lock, on two cores at once.
 - Module code that blocks or creates threads, or runs in an ISR.
 - Long soak runs: each run lasts seconds.
