@@ -12,6 +12,7 @@ This is a copy of `SCL-TESTS-shared` with one structural change: the
 SCL-TESTS-shared-new/
   SCL-shared/          submodule -> /home/dan/Downloads/GIT/SCL-shared-new.git
   api-shared/          on-target tests of the new APIs
+  pico2-pizero-shared/ SMP loader tests on the Pi-Zero RP2350B (µOS++ SMP)
   dynamic-shared/      POSIX dlopen (newlib), nolib XIP, fixtures
   static-shared/       scl::static + XIP + no-PIC + SPI-flash
   relocatable-shared/  ET_REL loader, load_set, cyclic cluster
@@ -66,6 +67,11 @@ own values. `[ERROR]` lines in a passing log are not always faults. In `static`,
 that expects the error. `static-drv` logs `missing relocation/dynsym/dynstr data`
 four times; `libspi.so`, `libuart.so` and `libled.so` have no `.rel.dyn`, which fits
 the message, and the run completes.
+
+## Pi-Zero RP2350B status (verified)
+
+All five SMP loader tests passed on the board in three consecutive runs
+(2026-10-30). See `pico2-pizero-shared/README.md`.
 
 ## Run
 
@@ -161,8 +167,8 @@ cd .. && git add SCL-shared && git commit -m "bump SCL-shared-new"
 
 ## What is not exercised
 
-- The hook tests count calls on a single-core Cortex-M4 with no data cache. Real
-  cache maintenance, RTOS and multi-core behaviour are untested.
+- On the WeAct board the hook tests only count calls, on one core with no data
+  cache. `pico2-pizero-shared/` covers two cores, an RTOS and XIP cache maintenance.
 - `scl_publish_release()` is only called once, with nothing observing it.
 - Loading a sidecar ELF from flash is untested; the tests read over semihosting.
 

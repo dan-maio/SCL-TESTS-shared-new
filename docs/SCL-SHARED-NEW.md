@@ -98,5 +98,6 @@ git commit -m "bump SCL-shared-new"
 ## Next steps
 
 - NUCLEO-F411RE hardware validation (the suites support `SCL_BOARD=nucleo`).
-- A real RTOS/SMP smoke app with a recursive `scl_loader_lock/unlock`, and cache
-  overrides on a Cortex-M7.
+- Cache overrides on a Cortex-M7. `pico2-pizero-shared/` covers SMP and the
+  RP2350's XIP cache.
+- Re-run the WeAct suite at `36ac5e6`, which made `_DYNAMIC` weak.
