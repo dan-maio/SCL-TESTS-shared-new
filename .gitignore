@@ -7,3 +7,6 @@ build/
 **/*.generated.inc
 # host tool binary
 **/gen-imports
+
+# run-all logs
+logs/

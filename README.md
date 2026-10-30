@@ -37,14 +37,38 @@ confirms the host tools and the new loader sources work together.
 ## Run
 
 ```sh
+# all WeAct tests, sequentially, with a 3-second gap
+./run-all-weact.sh
+
+# only a subset (regex on the test name)
+./run-all-weact.sh static
+./run-all-weact.sh 'xip-'
+
+# skip the two tests that need the W25Q64 SPI flash
+SKIP_SPI=1 ./run-all-weact.sh
+
+# print commands without flashing
+DRY_RUN=1 ./run-all-weact.sh
+```
+
+`run-all-weact.sh` streams the OpenOCD semihosting console live, logs each test
+under `logs/weact-<timestamp>/`, continues after failures, and prints a
+PASS/FAIL summary at the end.
+
+Tunables: `RUN_MS` (default 60000 ms per firmware), `GAP` (default 3 s),
+`SKIP_SPI`, `LOGDIR`.
+
+Individual suites:
+
+```sh
 # optimal: XIP or RAM
-cd optimal-shared && ./build-and-run.sh xip qemu
+cd optimal-shared && ./build-and-run.sh xip weact
 
 # relocatable
-cd relocatable-shared && ./test-relocatable/build-and-run.sh qemu
+cd relocatable-shared && ./test-relocatable/build-and-run.sh weact
 
 # dynamic POSIX dlopen (hosted toolchain)
-cd dynamic-shared && ./test-dynamic/build-and-run.sh qemu test1
+cd dynamic-shared && ./test-dynamic/build-and-run.sh weact test1
 ```
 
 Prerequisites: `arm-none-eabi-gcc/g++` (xPack is auto-detected by
