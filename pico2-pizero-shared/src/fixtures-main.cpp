@@ -307,7 +307,11 @@ const scl_sym_entry kMainSyms[] = {
     SYM("logf", static_cast<float (*)(float)>(&logf)), SYM("sqrtf", static_cast<float (*)(float)>(&sqrtf)),
     SYM("malloc", &locked_malloc), SYM("free", &locked_free), SYM("_Znwj", &locked_new),
     SYM("_ZdlPv", &locked_delete), SYM("_ZdlPvj", &locked_delete2),
-    SYM("HOST_K", &HOST_K), SYM("host_f", &host_f), SYM("AA", &AA), SYM("BB", &BB), SYM("s1", &s1), SYM("f", &f), SYM("w", &w),
+    SYM("HOST_K", &HOST_K),
+#if !defined(TEST_HIDE_HOST_F)
+    SYM("host_f", &host_f),
+#endif
+    SYM("AA", &AA), SYM("BB", &BB), SYM("s1", &s1), SYM("f", &f), SYM("w", &w),
     SYM("printf", &fixture_printf), SYM("puts", &fixture_puts), SYM("strcat", &strcat), SYM("strlen", &strlen),
     SYM("log", &fixture_log), SYM("__aeabi_d2f", &__aeabi_d2f), SYM("__aeabi_f2d", &__aeabi_f2d),
 #if TEST_GROUP == 4
@@ -359,6 +363,7 @@ __attribute__((naked)) u32 call_mod(fn2, u32 /*got*/, u32 /*a*/, u32 /*b*/) {
 inline u32 call(const Fn& f, u32 a = 0, u32 b = 0) { return call_mod(f.f, f.got, a, b); }
 
 const char* g_boot_error = "boot_load did not run";
+const char* g_missing = nullptr;   // from the loader's first_missing_import()
 unsigned g_boot_cpu = 99;
 u32 g_text_addr, g_data_got;
 
@@ -530,6 +535,7 @@ bool load_fixtures() {
     GET(prov_value, 0); GET(cons_call, 1);
     GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
 #endif
+    g_missing = fw::dl_first_missing_import();
 #elif defined(TEST_LOADER_NEWLIB)
     static firmware::link_context ctx;
     ctx.set_symtab(reinterpret_cast<const firmware::sym_entry*>(kMainSyms), kNumSyms);
@@ -562,6 +568,7 @@ bool load_fixtures() {
     GET(prov_value, 0); GET(cons_call, 1);
     GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
 #endif
+    g_missing = linker.first_missing_import();
 #elif defined(TEST_LOADER_OPTIMAL)
     alignas(4) static std::byte blob[2048];
     static scl::symtab::view table;
@@ -594,6 +601,7 @@ bool load_fixtures() {
     GET(prov_value, 0); GET(cons_call, 1);
     GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
 #endif
+    g_missing = xip::nopic::first_missing_import();
 #elif defined(TEST_LOADER_STATIC)
     static elf_loader::symbol_table syms;
     syms.add_entries(kMainSyms, kNumSyms);
@@ -619,6 +627,7 @@ bool load_fixtures() {
     GET(library_function, 2); GET(retstr, 2);
     GET(lf, 3); GET(lf2, 3); GET(lf3, 3); GET(xxx, 3);
 #endif
+    for (int i = 0; i < kCount && !g_missing; ++i) g_missing = h[i].first_missing_import();
 #elif defined(TEST_LOADER_XIP)
     xipl::set_symtab(kMainSyms, kNumSyms);
     if (!provision_flash()) return false;
@@ -658,6 +667,7 @@ bool load_fixtures() {
     GET(prov_value, 0); GET(cons_call, 1);
     GET(lf, 2); GET(lf2, 2); GET(lf3, 2); GET(xxx, 2);
 #endif
+    g_missing = xipl::first_missing_import();
 #endif
     return ok;
 }
@@ -688,6 +698,15 @@ void boot_load() {
     if (!psram::init()) { g_boot_error = "psram::init"; return; }
 #endif
     if (!load_fixtures()) return;
+#if defined(TEST_EXPECT_MISSING)
+    return;   // this image hides a symbol on purpose: its calls would fault
+#endif
+    if (g_missing) {
+        static char msg[80];
+        std::snprintf(msg, sizeof msg, "missing import: %s", g_missing);
+        g_boot_error = msg;
+        return;
+    }
 
 #if TEST_GROUP == 1
     g_text_addr = reinterpret_cast<u32>(g_fx.cpp3_method.f);
@@ -1033,6 +1052,24 @@ int os_main(int, char*[]) {
     this_thread::thread().cpu_affinity(1u << 0);
     led::init();
     say("\n" TEST_NAME ": fixtures loaded at boot on the RP2350, then SMP\n");
+
+#if defined(TEST_EXPECT_MISSING)
+    /* Negative test: main's table hides host_f, which slib imports. */
+#if defined(TEST_LOADER_RELOC)
+    const bool reported = g_boot_error != nullptr && std::strstr(g_boot_error, "reloc::load") != nullptr;
+    say(reported ? "  ok    the load was refused\n" : "  FAIL: the load was not refused\n");
+#else
+    const bool reported = g_missing != nullptr && std::strcmp(g_missing, TEST_EXPECT_MISSING) == 0;
+    say("  first_missing_import() = ");
+    say(g_missing ? g_missing : "(none)");
+    say("\n");
+    say(reported ? "  ok    the missing import was reported by name\n"
+                 : "  FAIL: the missing import was not reported\n");
+#endif
+    say(reported ? "RESULT: PASS\n" : "RESULT: FAIL\n");
+    if (reported) hw_result::ok();
+    hw_result::fail();
+#endif
 
     bool ok = true;
     auto check = [&](bool c, const char* what) {

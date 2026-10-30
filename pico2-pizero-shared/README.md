@@ -111,6 +111,10 @@ them. The ISR makes pure calls, and calls `my_systick_handler` under main's lock
 and the three XIP adapters (flash). The board's vector table has no `TIMER1` entries, so
 each core points `VTOR` at a patched RAM copy, as the WeAct test does.
 
+Every fixture test also calls its loader's `first_missing_import()` at boot, and fails if
+any import has no provider. The eight `scl-neg-*` tests hide `host_f` from main's table: it
+must be reported by name, and `scl::reloc` must refuse the load.
+
 Each fixture test first prints every fixture call with its traces, on core 0 and then
 on core 1, like the WeAct apps. Traces are off for the stress loop that follows.
 
@@ -133,9 +137,8 @@ results there.
 
 ## Status
 
-One full run of the first 47 tests passed on the board (2026-10-30), on the loader now
-committed as `08bf69f`. The 11 `scl-fix5-*` tests were added after it and passed in their
-own runs on the same loader. All 58 have not yet run together.
+One full run of all 66 tests passed on the board (2026-10-30), against SCL-shared-new
+`08bf69f` plus the `first_missing_import()` change, committed as `380161e`.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.
 
@@ -181,9 +184,10 @@ between tests.
 - **Eager binding broke cross-call.** `dl_set_lazy_binding(false)` also skipped recording
   the `.rel.dyn` table the cross-call router reads, so those slots stayed empty. Fixed
   in `20c30b3`.
-- **A missing import is not reported under cross-call.** A symbol absent from main's
-  table (`puts`, from a `printf` GCC rewrote) loaded without error and faulted at
-  `PC=0` when called. This is not fixed.
+- **A missing import used to load silently and fault when called** (`puts`, from a `printf`
+  GCC rewrote). Each loader now has `first_missing_import()`, to call after loading the
+  set, and call-time lookups log the name. Loading itself still succeeds, because a later
+  module may provide the symbol, so callers must make the check.
 - **Writing flash slows it.** After the bootrom write, flash stays in serial read mode
   until reconfigured: `scl-fix-xip-flash` takes about 80 s.
 - **`dl_set_symtab()` did not link on non-PIE firmware**, because `dl.cpp` still
