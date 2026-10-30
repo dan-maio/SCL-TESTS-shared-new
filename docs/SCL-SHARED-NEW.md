@@ -100,8 +100,8 @@ git commit -m "bump SCL-shared-new"
 `pico2-pizero-shared/` runs 77 tests under the µOS++ SMP kernel, all passing in one run at
 `9f1320f`: every loader, on the shared fixtures, with C++ exceptions and an interrupt on each
 core. It found most of the loader fixes since `ab7737d`. The suite's README lists them.
-`SCL-EXAMPLES-shared-new/pizero/` has the `float`, `spifs` and `combo` examples for every loader
-on this board; all 27 pass at `9f1320f`.
+`SCL-EXAMPLES-shared-new/pizero/` has the WeAct examples and these fixtures on every loader on
+this board, and writing flash with both cores running; all 76 firmwares pass at `9f1320f`.
 
 ## Next steps
 
