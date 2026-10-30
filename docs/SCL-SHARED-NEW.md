@@ -53,10 +53,8 @@ compatible with SCL-shared-new.
 
 ## WeAct F411CE validation
 
-All 18 tests have a passing log on the WeAct F411CE with the W25Q64 fitted
-(2026-10-30), using `run-all-weact.sh` (`RUN_MS=180000`). The logs come from 15
-partial sessions, many before `1fb1680`, not one full run; the root `README.md`
-describes the limits of this evidence.
+All 22 tests passed on the WeAct F411CE with the W25Q64 fitted (2026-10-30), in one
+`run-all-weact.sh` run from clean builds (`RUN_MS=180000`), against `ab7737d`:
 
 | Group | Result |
 |---|---|
@@ -67,6 +65,7 @@ describes the limits of this evidence.
 | overlay | PASS |
 | static / static-cpp / static-direct / static-drv | PASS |
 | XIP semihosting / direct / no-PIC / no-PIC-simple / interrupts / SPI-flash | PASS |
+| new APIs (`api-shared/`, four tests) | PASS |
 
 Three runner/documentation fixes came out of the hardware run:
 
@@ -80,36 +79,11 @@ Three runner/documentation fixes came out of the hardware run:
 
 ## Boot-time / no-tool paths
 
-These suites do not yet exercise the new sidecar/semihosting symbol paths. To
-test them:
-
-1. Replace `scl_embed_symtab(target)` with a boot-time table load.
-2. Read `firmware.elf` over semihosting and call
-   `scl::symtab::collect_buffered()` + `ctx.set_symtab(...)`, or use the
-   compile-time `SCL_REGISTER_SYM` table.
-3. Remove the `.scl_symtab` placeholder/`objcopy` step.
-
-`SCL-shared/docs/BOOT-SYMTAB.md` contains the code; the existing fallback in
-`dynamic-shared/test/platforms/board-hosted/vendor/firmware/src/dl-impl.cpp` is
-the reference implementation. The §1 snippet in `BOOT-SYMTAB.md` also needs
-`#include "loader/sources/memory-byte-source.hpp"` and
-`#include "dynamic-nolib/dl.hpp"` to compile.
-
-## Known issues in SCL-shared-new (`1fb1680`)
-
-Found by reviewing the code against its docs. They are recorded here so test work
-can target them; none are fixed in the pinned commit.
-
-| Issue | Effect |
-|---|---|
-| `scl::static` does not link `symtab-runtime.cpp` | `scl::symtab::registered()` gives an undefined reference in static-only firmware, and `collect()` lives in the same file. `add_entries()` itself is available. |
-| The M7 example in `RTOS-MULTICORE.md` §3 overrides only `scl_cache_clean` and `scl_cache_invalidate` | RAM loaders call `scl_cache_clean_invalidate()`, whose default is only a barrier, so following the example performs no cache maintenance for them. |
-| RAM `dynamic-newlib` has no lock calls | Only its XIP adapter is guarded, although the docs describe lock guards on every loader. |
-| Constructors run under the lock | `dlopen_source`, reloc `load` and `load_set` hold the guard during constructors; the docs say the hooks are not held while module code runs. |
-| `scl_overlay_load` | The `resident` check is outside the lock, and there is no cache maintenance after the copy into the window. |
-| `tests/run.sh` in a clean clone | Fails at `open ELF`: the default `411ce-100Mhz.elf` is gitignored. Pass another ARM ELF with `ELF=...`. |
-| `sidecar-elf-example.ld` | The `SIDECAR` region ends at `0x080A0000`, past the end of the F411's 512K flash at `0x08080000`. |
-| `SCL-shared/docs/manual.md` | Unchanged from the upstream repository, so it describes the submodule layout and omits the new APIs. |
+`api-shared/` exercises them. `api-dynamic-xip-semihost-table` reads its table over
+semihosting with no `gen-symtab` step, from an ELF copy reduced to the imported
+symbols by `objcopy`, because the full ELF's `.strtab` (90 KB) does not fit in RAM.
+`api-static-boot-table` uses the compile-time `SCL_REGISTER_SYM` table. The other
+suites still use `scl_embed_symtab()`.
 
 ## Updating the loader
 
@@ -123,10 +97,6 @@ git commit -m "bump SCL-shared-new"
 
 ## Next steps
 
-- One complete `run-all-weact.sh` run against the pinned commit.
-- Fix the loader issues above in SCL-shared-new, then bump the submodule.
 - NUCLEO-F411RE hardware validation (the suites support `SCL_BOARD=nucleo`).
-- Add a slot in `dynamic-shared` that loads `main`'s table at boot (semihosting
-  or sidecar) and runs with `gen-symtab` disabled.
-- Add an RTOS/SMP smoke app that defines strong `scl_loader_lock/unlock` and
-  calls `dl_set_lazy_binding(false)`.
+- A real RTOS/SMP smoke app with a recursive `scl_loader_lock/unlock`, and cache
+  overrides on a Cortex-M7.

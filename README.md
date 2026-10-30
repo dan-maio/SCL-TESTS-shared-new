@@ -164,7 +164,7 @@ cd .. && git add SCL-shared && git commit -m "bump SCL-shared-new"
 - The hook tests count calls on a single-core Cortex-M4 with no data cache. Real
   cache maintenance, RTOS and multi-core behaviour are untested.
 - `scl_publish_release()` is only called once, with nothing observing it.
-- `sidecar` ELF loading from flash is untested; the tests read over semihosting.
+- Loading a sidecar ELF from flash is untested; the tests read over semihosting.
 
 ## Notes
 
