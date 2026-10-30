@@ -73,13 +73,20 @@ in the 2000-iteration tests. Those tests therefore expect call-time locking, and
 a real recursive loader lock, which `fixtures-main.cpp` provides. `scl::reloc` takes
 no lock after publication.
 
+The `scl-fix2-*` tests run the same loaders and memories on `libprov`, `libcons` and
+`mylib2` (5000 or 1000 iterations for reloc and nolib; 2000 or 500 for XIP).
+
+Each fixture test first prints every fixture call with its traces, on core 0 and then
+on core 1, like the WeAct apps. Traces are off for the stress loop that follows.
+
 ## Run
 
 ```sh
 cmake -S . -B build
 cmake --build build --target scl-smp-all scl-fix-all
-./run-all-pizero.sh                 # all tests
+./run-all-pizero.sh                 # build, then all tests, live, 3 s apart
 ./run-all-pizero.sh psram           # a subset
+GAP=5 ./run-all-pizero.sh           # a different gap
 POWER_CYCLE=1 ./run-all-pizero.sh   # wait for a power cycle between tests
 ```
 
@@ -100,6 +107,9 @@ As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail
 
 The port's `hw.sh` advises one test per power cycle. These runs did not power-cycle
 between tests.
+
+The `scl-fix2-*` tests passed in one run. After the walkthroughs and live runner were
+added, three tests were re-run and passed; all 20 have not yet run together with them.
 
 ## What the board showed
 
@@ -127,8 +137,8 @@ between tests.
 
 - Loading or unloading after SMP has started, which this design excludes.
 - `scl::static`, `scl::optimal`, `scl::overlay`, and `xip::static`.
-- The other WeAct fixtures: `libprov`, `libcons`, `mylib2`, and the C++ exception ones
-  (`ehx_catch`, `libcppeh`, `libcppsh`). `dynamic-nolib` has only 4 handles.
+- The C++ exception fixtures (`ehx_catch`, `libcppeh`, `libcppsh`), and the STM32 driver
+  fixtures (`libspi`, `libled`, `libuart`).
 - Fixture functions that write their own state without a lock, on two cores at once.
 - Module code that blocks or creates threads, or runs in an ISR.
 - Long soak runs: each run lasts seconds.
