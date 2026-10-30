@@ -11,6 +11,7 @@ This is a copy of `SCL-TESTS-shared` with one structural change: the
 ```text
 SCL-TESTS-shared-new/
   SCL-shared/          submodule -> /home/dan/Downloads/GIT/SCL-shared-new.git
+  api-shared/          on-target tests of the new APIs
   dynamic-shared/      POSIX dlopen (newlib), nolib XIP, fixtures
   static-shared/       scl::static + XIP + no-PIC + SPI-flash
   relocatable-shared/  ET_REL loader, load_set, cyclic cluster
@@ -24,7 +25,8 @@ suites compile the new loader sources with their own flags.
 
 ## QEMU status (recorded)
 
-Results recorded when the suites were wired to SCL-shared-new. Only these four
+Results recorded when the suites were wired to SCL-shared-new, and not re-run on
+the pinned commit. Only these four
 commands have QEMU results; `overlay-shared` and `static-shared` have none.
 
 | Suite | Command | Result |
@@ -37,10 +39,11 @@ commands have QEMU results; `overlay-shared` and `static-shared` have none.
 The dynamic test still uses the retained build-time `gen-symtab` flow, which
 confirms the host tools and the new loader sources work together.
 
-## WeAct F411CE status (recorded)
+## WeAct F411CE status (verified)
 
-All 18 tests have a passing log on the WeAct F411CE with the W25Q64 fitted
-(2026-10-30), using `RUN_MS=180000`:
+All 22 tests passed on the WeAct F411CE with the W25Q64 fitted (2026-10-30), in one
+`./run-all-weact.sh` run from clean builds with `RUN_MS=180000`, against
+SCL-shared-new `ab7737d`:
 
 | Group | Tests | Result |
 |---|---|---|
@@ -50,26 +53,19 @@ All 18 tests have a passing log on the WeAct F411CE with the W25Q64 fitted
 | overlay | `overlay` | PASS |
 | static | `static`, `static-cpp`, `static-direct`, `static-drv` | PASS |
 | XIP static | `xip-static-semihosting`, `xip-static-direct`, `xip-static-no-pic`, `xip-static-no-pic-simple`, `xip-interrupt-static`, `xip-interrupt-static-direct`, `xip-spi-flash` | PASS |
+| new APIs | `api-static-boot-table`, `api-optimal-boot-table`, `api-dynamic-xip-semihost-table`, `api-nolib-eager` | PASS |
 
-The runner treats a test as PASS when its completion marker appears in the log;
-OpenOCD returns 1 after a clean `shutdown` on this probe. `xip-spi-flash` and
-`static-drv` exercise the W25Q64.
+A test passes when its completion marker appears and no failure pattern
+(`RESULT: FAILURE`, `FAIL:`, `HardFault`, `LOAD FAILED`) does. OpenOCD's exit code is
+ignored, because it returns 1 after a clean `shutdown` on this probe.
+`xip-spi-flash` and `static-drv` exercise the W25Q64.
 
-How far this evidence goes:
-
-- The results combine 15 partial `run-all-weact.sh` sessions (09:36–10:35), not
-  one uninterrupted run, and many of the logs predate SCL-shared-new `1fb1680`,
-  the commit pinned now. To get a single result for the pinned commit, run
-  `./run-all-weact.sh` once from start to finish.
-- A completion marker shows the firmware reached its end, not that every check
-  passed. The latest logs contain no `FAIL` lines, but the runner does not look
-  for them.
-- `[ERROR]` lines in a passing log are not always faults. In `static`, the
-  `load_bin ... buffer has 2824` line comes from the bounds test, which expects
-  that error. `static-drv` logs `missing relocation/dynsym/dynstr data` four
-  times while loading its drivers; `libspi.so` has no relocation section. The
-  run still completes, but this has not been confirmed as harmless for the
-  other drivers.
+A marker shows the firmware reached its end; only the `api-*` tests check all their
+own values. `[ERROR]` lines in a passing log are not always faults. In `static`,
+`static-cpp` and `static-direct`, `load_bin ... buffer has` comes from a bounds test
+that expects the error. `static-drv` logs `missing relocation/dynsym/dynstr data`
+four times; `libspi.so`, `libuart.so` and `libled.so` have no `.rel.dyn`, which fits
+the message, and the run completes.
 
 ## Run
 
@@ -149,29 +145,32 @@ cd .. && git add SCL-shared && git commit -m "bump SCL-shared-new"
 - `scl::common` now includes `symtab-runtime.cpp`, `port/os-hooks.c` and
   `port/cache.c`, so suites linking it build them. `scl::static` on its own
   links only the two `port/` files.
-- The tests run through the new lock and cache calls with their weak defaults:
-  the lock hooks are no-ops and the cache hooks are barriers only. Lock calls
-  are in the reloc, optimal, overlay, static, nolib and XIP paths. Cache calls
-  are in reloc, static, nolib and XIP.
+- The original tests run through the new lock and cache calls with their weak
+  defaults: the lock hooks are no-ops and the cache hooks are barriers only. Every
+  loader now makes both calls.
 - The dynamic-newlib test exercises the retained `gen-symtab` + `.scl_symtab`
   path; the boot-time/semihosting alternatives are documented in
   `SCL-shared/docs/BOOT-SYMTAB.md`.
 
+## New APIs
+
+`api-shared/` calls the new APIs on the board: the symbol-table functions,
+`SCL_REGISTER_SYM`, `add_entries`, `dl_set_symtab`, `dl_set_lazy_binding`,
+`set_main_symbols`, `scl_publish_release`, and the lock and cache hooks. See
+`api-shared/README.md`.
+
 ## What is not exercised
 
-No suite calls the new APIs: `dl_set_symtab`, `dl_set_lazy_binding`,
-`scl::symtab::*`, `SCL_REGISTER_SYM`, `add_entries` or `scl_publish_release`.
-The passing results therefore show that the existing loader paths did not
-regress, not that these APIs work on a target. `SCL-shared/tests/` covers the
-symbol-table functions and `link_context` on the host only. See
-`docs/SCL-SHARED-NEW.md` for known loader issues.
+- The hook tests count calls on a single-core Cortex-M4 with no data cache. Real
+  cache maintenance, RTOS and multi-core behaviour are untested.
+- `scl_publish_release()` is only called once, with nothing observing it.
+- `sidecar` ELF loading from flash is untested; the tests read over semihosting.
 
 ## Notes
 
 - All 18 runner tests have been executed on the WeAct board. The NUCLEO board
   has not been validated.
-- `scl::static` standalone targets now link `src/port/os-hooks.c` and
-  `src/port/cache.c` (SCL-shared-new commit `1fb1680`); without that, static-only
-  firmware failed to link `scl_loader_lock/unlock`.
+- `scl::static` standalone targets now link `src/port/os-hooks.c`,
+  `src/port/cache.c` and `src/symtab-runtime.cpp`.
 - The SPI tests (`static-drv`, `xip-spi-flash`) require the W25Q64; both passed
   with it fitted.
