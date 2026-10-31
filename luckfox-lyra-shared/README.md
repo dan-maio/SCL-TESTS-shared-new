@@ -78,11 +78,11 @@ That is the shutdown cutting off a running test, not a probe fault.
 
 ## Status
 
-The first full run ended at 37 passed and 11 failed. All 11 were re-run after the fixes above and passed
-singly or in groups, except that `scl-fix2-newlib`, `scl-fix5-newlib`, `scl-fix6-newlib` and
-`scl-fix4-newlib` have only run since with the address check wrong or unproven.
+A clean run of all 48 with every fix, at `86c83d2`, is not finished. So far 45 have passed and none has
+failed, including all 8 `scl-fix4` exception tests and the `newlib` tests. The last 3, `scl-neg-xip`,
+`-xipstatic` and `-xipnolib`, have no result in this run.
 
-A clean run of all 48 with every fix is not finished. Until it is, none of this is a full result.
+An earlier full run, before the fixes above, ended at 37 passed and 11 failed.
 
-A semihosting error, `Failed semihosting operation (0x05)`, appeared under load in earlier runs. Its
-cause is not known.
+`Failed semihosting operation (0x05)` appeared in that earlier run, and in passing Pi-Zero runs. It has
+not appeared in this run so far. Its cause is not known.

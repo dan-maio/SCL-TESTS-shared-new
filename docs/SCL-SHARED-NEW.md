@@ -98,7 +98,7 @@ git commit -m "bump SCL-shared-new"
 ## Pi-Zero RP2350B validation
 
 `pico2-pizero-shared/` runs 77 tests under the µOS++ SMP kernel, all passing in one run at
-`9f1320f`: every loader, on the shared fixtures, with C++ exceptions and an interrupt on each
+`86c83d2`: every loader, on the shared fixtures, with C++ exceptions and an interrupt on each
 core, including the LED blink seen on the board. It found most of the loader fixes since `ab7737d`. The suite's README lists them.
 `SCL-EXAMPLES-shared-new/pizero/` has the WeAct examples and these fixtures on every loader on
 this board, and writing flash with both cores running. Its README has their status.
@@ -106,7 +106,8 @@ this board, and writing flash with both cores running. Its README has their stat
 ## Luckfox Lyra B validation
 
 `luckfox-lyra-shared/` runs 48 tests on the RK3506's 3x Cortex-A7 under the µOS++ SMP kernel. It is the
-first board here with an ARM-mode main and L1 caches. Its first full run is not finished: see its README.
+first board here with an ARM-mode main and L1 caches. 45 of the 48 pass so far, in a run that is not
+finished: see its README.
 
 ## Next steps
 

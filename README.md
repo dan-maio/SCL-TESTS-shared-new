@@ -46,16 +46,15 @@ confirms the host tools and the new loader sources work together.
 | Board | Suite | Tests | Result (2026-10-30) | Loader |
 |---|---|---|---|---|
 | WeAct F411CE + W25Q64 | suites + `api-shared/` | 22 | all pass, in one run | `9f1320f` |
-| Pi-Zero RP2350B + PSRAM | `pico2-pizero-shared/` | 77 | all pass, in one run | `9f1320f` |
+| Pi-Zero RP2350B + PSRAM | `pico2-pizero-shared/` | 77 | all pass, in one run | `86c83d2` |
 
 Both boards pass at the same commit. The NUCLEO board has not been validated.
 
-The Luckfox Lyra B has its own suite, `luckfox-lyra-shared/`, of 48 tests. Its first full run is not
-finished: see that folder's README.
+The Luckfox Lyra B has its own suite, `luckfox-lyra-shared/`, of 48 tests. 45 pass so far in a run that
+is not finished: see that folder's README.
 
-The `SCL-shared` submodule now pins a commit after `9f1320f`, with the Cortex-A fix in
-`scl/code-addr.h`. On Cortex-M that helper still forces the Thumb bit, so the WeAct and Pi-Zero results
-above are from `9f1320f` and have not been re-run at the new commit.
+The `SCL-shared` submodule pins a commit after `9f1320f`, with two fixes found on the Luckfox Lyra. The
+WeAct results above are from `9f1320f` and have not been re-run at the new commit.
 
 ## WeAct F411CE status (verified)
 

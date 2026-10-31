@@ -146,8 +146,8 @@ results there.
 
 ## Status
 
-One full run of all 77 tests passed on the board (2026-10-30), with the loader now committed as SCL-shared-new
-`9f1320f`. That loader has not yet run on the WeAct board.
+One full run of all 77 tests passed on the board (2026-10-31), with the loader at `86c83d2`. That loader
+has not yet run on the WeAct board.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.
 
