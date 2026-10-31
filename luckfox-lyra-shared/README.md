@@ -78,11 +78,11 @@ That is the shutdown cutting off a running test, not a probe fault.
 
 ## Status
 
-A clean run of all 48 with every fix, at `86c83d2`, is not finished. So far 45 have passed and none has
-failed, including all 8 `scl-fix4` exception tests and the `newlib` tests. The last 3, `scl-neg-xip`,
-`-xipstatic` and `-xipnolib`, have no result in this run.
+All 48 tests passed in one full run on the board (2026-10-31), with the loader at `86c83d2`. No test
+failed or faulted, and `Failed semihosting operation` did not appear.
 
-An earlier full run, before the fixes above, ended at 37 passed and 11 failed.
+An earlier full run, before the fixes above, ended at 37 passed and 11 failed, and showed that semihosting
+error, as have some passing Pi-Zero runs. Its cause is not known.
 
-`Failed semihosting operation (0x05)` appeared in that earlier run, and in passing Pi-Zero runs. It has
-not appeared in this run so far. Its cause is not known.
+The firmware counts LED blinks, but it cannot see the light. Each blink lasts about half a second, and
+someone has to watch the LED to confirm it.

@@ -106,8 +106,7 @@ this board, and writing flash with both cores running. Its README has their stat
 ## Luckfox Lyra B validation
 
 `luckfox-lyra-shared/` runs 48 tests on the RK3506's 3x Cortex-A7 under the µOS++ SMP kernel. It is the
-first board here with an ARM-mode main and L1 caches. 45 of the 48 pass so far, in a run that is not
-finished: see its README.
+first board here with an ARM-mode main and L1 caches. All 48 pass, in one run at `86c83d2`: see its README.
 
 ## Next steps
 
