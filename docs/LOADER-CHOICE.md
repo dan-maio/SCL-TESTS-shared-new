@@ -471,3 +471,10 @@ Rules these results depend on:
 - **Do not rely on `LDREX`/`STREX` across cores** on this chip. Import a lock from main.
 - **An interrupt can enter a module** if it saves and restores `r10` around the call, on
   every model tested. Do not call a function that takes a blocking RTOS mutex from an ISR.
+
+## On a Cortex-A7: the Luckfox Lyra B
+
+`luckfox-lyra-shared/` in `SCL-TESTS-shared-new` runs these loaders on 3x Cortex-A7, from DRAM, with L1
+caches. There is no flash for apps to run from, so the XIP loaders run in place from a read-only DRAM
+region there, which tests their split of code and data but not real flash. Its first full run is not
+finished.

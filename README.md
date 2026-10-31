@@ -13,6 +13,7 @@ SCL-TESTS-shared-new/
   SCL-shared/          submodule -> /home/dan/Downloads/GIT/SCL-shared-new.git
   api-shared/          on-target tests of the new APIs
   pico2-pizero-shared/ SMP loader tests on the Pi-Zero RP2350B (µOS++ SMP)
+  luckfox-lyra-shared/ SMP loader tests on the Luckfox Lyra B: RK3506, 3x Cortex-A7, SD card
   dynamic-shared/      POSIX dlopen (newlib), nolib XIP, fixtures
   static-shared/       scl::static + XIP + no-PIC + SPI-flash
   relocatable-shared/  ET_REL loader, load_set, cyclic cluster
@@ -48,6 +49,13 @@ confirms the host tools and the new loader sources work together.
 | Pi-Zero RP2350B + PSRAM | `pico2-pizero-shared/` | 77 | all pass, in one run | `9f1320f` |
 
 Both boards pass at the same commit. The NUCLEO board has not been validated.
+
+The Luckfox Lyra B has its own suite, `luckfox-lyra-shared/`, of 48 tests. Its first full run is not
+finished: see that folder's README.
+
+The `SCL-shared` submodule now pins a commit after `9f1320f`, with the Cortex-A fix in
+`scl/code-addr.h`. On Cortex-M that helper still forces the Thumb bit, so the WeAct and Pi-Zero results
+above are from `9f1320f` and have not been re-run at the new commit.
 
 ## WeAct F411CE status (verified)
 
