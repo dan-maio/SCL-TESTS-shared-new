@@ -74,6 +74,13 @@ That is the shutdown cutting off a running test, not a probe fault.
 
 ## Status
 
-The first full run of the 48 is not finished. So far, the 6 non-`newlib` `scl-fix-*` tests have passed.
-`scl-fix-newlib` failed only on a wrong expected address in the test, since corrected, and has not been
-re-run. Exceptions, interrupts and the other groups are not yet known.
+The first full run of the 48 is not finished, so these are partial results:
+
+- `scl-fix`, `scl-fix2`, `scl-fix3`, `scl-fix-overlay` and `scl-fix5` passed, except the `newlib` tests.
+- The `newlib` tests failed on a wrong expected address in the test, since corrected, and have not been
+  re-run.
+- `scl-fix6-nolib`, `-xip` and `-xipnolib` failed. `scl-fix6-nolib` failed on a stale expectation of no
+  lookups, since corrected: `libsd` imports from main. None of the three has been re-run.
+- C++ exceptions work on all 3 cores in `scl-fix4-reloc`, which passed. `scl-fix4-nolib` failed under load,
+  on one wrong counter and one semihosting error. Neither cause is confirmed or fixed yet.
+- `scl-neg` has not run.

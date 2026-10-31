@@ -1180,9 +1180,9 @@ int os_main(int, char*[]) {
     }
     check(boot_locks > 0, "the load took the loader lock");
     check(g_cleans > 0 && g_invalidates > 0, "the loader made its cache calls");
-/* Lookups only happen where a fixture imports: group 6 imports nothing, and in group 5
- * xip::stat has bound main's imports at provision time. */
-#if defined(TEST_CROSS_CALL_LOOKUP) && TEST_GROUP != 6 && !(TEST_GROUP == 5 && defined(TEST_XIP_STATIC))
+/* Lookups only happen where a fixture imports. libsd imports from main here, so group 6 has them;
+ * in groups 5 and 6, xip::stat has bound main's imports at provision time. */
+#if defined(TEST_CROSS_CALL_LOOKUP) && !((TEST_GROUP == 5 || TEST_GROUP == 6) && defined(TEST_XIP_STATIC))
     check(g_locks_after_publish > 0, "cross-module calls used the call-time lookup");
 #else
     check(g_locks_after_publish == 0, "no loader code ran after publication");
