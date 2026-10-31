@@ -748,7 +748,12 @@ void boot_load() {
     g_text_addr = reinterpret_cast<u32>(g_fx.lf.f);
     g_data_got = g_fx.lf.got;
 #endif
-    if ((g_text_addr >> 24) != TEST_EXPECT_TEXT_TOP) { g_boot_error = "fixture text in the wrong memory"; return; }
+    if ((g_text_addr >> 24) != TEST_EXPECT_TEXT_TOP) {
+        static char msg[64];
+        std::snprintf(msg, sizeof msg, "fixture text at 0x%08x, the wrong memory", static_cast<unsigned>(g_text_addr));
+        g_boot_error = msg;
+        return;
+    }
 #if defined(TEST_EXPECT_DATA_TOP)
     if ((g_data_got >> 24) != TEST_EXPECT_DATA_TOP) { g_boot_error = "fixture data in the wrong memory"; return; }
 #endif

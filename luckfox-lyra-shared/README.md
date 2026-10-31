@@ -51,7 +51,11 @@ the 8 `scl-smp-*` tests, which the fixture tests largely overlap.
 - **The heap directly, under `app_lock`:** on this port, leaving the kernel's scheduler lock turns
   interrupts on unconditionally, and `malloc` takes that lock. A thread could then be preempted while
   holding `app_lock`, which deadlocked `scl-fix-nolib`. The imported allocator calls therefore use the heap
-  resource directly. The kernel is unchanged.
+  resource directly, and the exception firmwares link with `--wrap=malloc` and `--wrap=free` for the
+  allocations a throw makes. The kernel is unchanged.
+- **A second loader fix:** `xip-dynamic-newlib`'s call-time lookup built a `std::string`. Names over 15
+  characters, such as `__cxa_allocate_exception`, then allocated under the loader lock, which hung
+  `scl-fix4-xip`. The lookup now uses the name where it is, in `.dynstr`.
 - **`SYS_WRITE` for test output:** OpenOCD reads a `SYS_WRITE0` string one byte at a time, about a second
   per line on this CPU. Everything still goes to the semihosting console.
 
@@ -74,16 +78,11 @@ That is the shutdown cutting off a running test, not a probe fault.
 
 ## Status
 
-The first full run of the 48 has finished, with failures, and the re-run of the failures is not
-finished:
+The first full run ended at 37 passed and 11 failed. All 11 were re-run after the fixes above and passed
+singly or in groups, except that `scl-fix2-newlib`, `scl-fix5-newlib`, `scl-fix6-newlib` and
+`scl-fix4-newlib` have only run since with the address check wrong or unproven.
 
-- `scl-fix`, `scl-fix2`, `scl-fix3`, `scl-fix-overlay`, `scl-fix5` and the `scl-neg` tests that ran passed,
-  except the `newlib` tests listed next.
-- The `newlib` tests failed on a wrong expected address in the test, since corrected.
-- `scl-fix6-nolib`, `-xip` and `-xipnolib` failed on a stale expectation of no lookups, since corrected.
-  This is confirmed from the logs of `-nolib` and `-xip`.
-- C++ exceptions pass on `reloc`, `static`, `optimal` and `xip-static`. `dynamic-nolib` and
-  `xip-dynamic-nolib` got wrong counters under load, and `xip-dynamic-newlib` hung. These are the loaders
-  with lookups at call time. The likely cause is that a throw allocates with the kernel's `malloc` under
-  `app_lock`. The exception firmwares now link with `--wrap=malloc`, which is not yet proven to fix it.
-- One semihosting error appeared near the end of `scl-fix4-nolib`, and its cause is not known.
+A clean run of all 48 with every fix is not finished. Until it is, none of this is a full result.
+
+A semihosting error, `Failed semihosting operation (0x05)`, appeared under load in earlier runs. Its
+cause is not known.
