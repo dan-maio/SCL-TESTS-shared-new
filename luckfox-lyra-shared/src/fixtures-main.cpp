@@ -240,6 +240,12 @@ void locked_delete2(void* p, unsigned) { locked_free(p); }
 int board_sd_store(const void* data, u32 len) { return fatfshw::store_file("sclsd.bin", data, len) ? 1 : 0; }
 int board_sd_load(void* data, u32 len) { return fatfshw::load_file("sclsd.bin", data, len) ? 1 : 0; }
 #endif
+#if TEST_GROUP == 4
+/* A throw allocates through libsupc++'s malloc, under app_lock: the same problem. The firmware links
+ * with --wrap=malloc,--wrap=free, so that goes through the locked heap calls too. */
+void* __wrap_malloc(unsigned n) { return locked_malloc(n); }
+void __wrap_free(void* p) { locked_free(p); }
+#endif
 double fixture_log(double x) { return static_cast<double>(logf(static_cast<float>(x))); }
 float __aeabi_d2f(double);
 double __aeabi_f2d(float);

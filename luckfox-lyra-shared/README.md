@@ -74,13 +74,16 @@ That is the shutdown cutting off a running test, not a probe fault.
 
 ## Status
 
-The first full run of the 48 is not finished, so these are partial results:
+The first full run of the 48 has finished, with failures, and the re-run of the failures is not
+finished:
 
-- `scl-fix`, `scl-fix2`, `scl-fix3`, `scl-fix-overlay` and `scl-fix5` passed, except the `newlib` tests.
-- The `newlib` tests failed on a wrong expected address in the test, since corrected, and have not been
-  re-run.
-- `scl-fix6-nolib`, `-xip` and `-xipnolib` failed. `scl-fix6-nolib` failed on a stale expectation of no
-  lookups, since corrected: `libsd` imports from main. None of the three has been re-run.
-- C++ exceptions work on all 3 cores in `scl-fix4-reloc`, which passed. `scl-fix4-nolib` failed under load,
-  on one wrong counter and one semihosting error. Neither cause is confirmed or fixed yet.
-- `scl-neg` has not run.
+- `scl-fix`, `scl-fix2`, `scl-fix3`, `scl-fix-overlay`, `scl-fix5` and the `scl-neg` tests that ran passed,
+  except the `newlib` tests listed next.
+- The `newlib` tests failed on a wrong expected address in the test, since corrected.
+- `scl-fix6-nolib`, `-xip` and `-xipnolib` failed on a stale expectation of no lookups, since corrected.
+  This is confirmed from the logs of `-nolib` and `-xip`.
+- C++ exceptions pass on `reloc`, `static`, `optimal` and `xip-static`. `dynamic-nolib` and
+  `xip-dynamic-nolib` got wrong counters under load, and `xip-dynamic-newlib` hung. These are the loaders
+  with lookups at call time. The likely cause is that a throw allocates with the kernel's `malloc` under
+  `app_lock`. The exception firmwares now link with `--wrap=malloc`, which is not yet proven to fix it.
+- One semihosting error appeared near the end of `scl-fix4-nolib`, and its cause is not known.

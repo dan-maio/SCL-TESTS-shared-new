@@ -116,6 +116,7 @@ function(scl_fix_test name loader target ext top iters group)
         execute_process(COMMAND ${CMAKE_CXX_COMPILER} -mcpu=cortex-a7 -marm -mfloat-abi=hard -mfpu=neon-vfpv4 -print-file-name=libsupc++.a
                         OUTPUT_VARIABLE libsupcxx OUTPUT_STRIP_TRAILING_WHITESPACE)
         target_link_libraries("${name}-hwd" PRIVATE "${libsupcxx}")
+        target_link_options("${name}-hwd" PRIVATE -Wl,--wrap=malloc -Wl,--wrap=free)
         target_compile_options("${name}-hwd" PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fexceptions> $<$<COMPILE_LANGUAGE:CXX>:-frtti>)
     endif()
     target_compile_definitions("${name}-hwd" PRIVATE $<$<COMPILE_LANGUAGE:ASM>:SCL_ARENA_BYTES=98304>)
