@@ -60,7 +60,7 @@ The Luckfox Lyra B has its own suite, `luckfox-lyra-shared/`, of 48 tests. All p
 `aaf2120`. Its ARM-state (A32) suite, `luckfox-lyra-arm-shared/`, has 9 tests — one per SCL loader,
 with every fixture built `-marm` — and all 9 also pass at `aaf2120`.
 
-The `SCL-shared` submodule pins `0837825`, the loader commit that carries the
+The `SCL-shared` submodule pins `749da4a`, the loader commit that carries the
 shared-library guide; the test runs above were built at `aaf2120` (the same code,
 before the guide). The top-level `common-elf-reader` submodule is
 `elf32_read_parse-new.git` `f650889`.
