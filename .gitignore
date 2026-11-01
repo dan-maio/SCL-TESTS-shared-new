@@ -1,5 +1,6 @@
 # build trees
 **/build/
+**/build-*/
 build/
 # generated fixtures / vendored outputs
 **/fixtures/build/
@@ -10,3 +11,4 @@ build/
 
 # run-all logs
 logs/
+**/logs/
