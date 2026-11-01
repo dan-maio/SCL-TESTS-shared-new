@@ -43,24 +43,25 @@ confirms the host tools and the new loader sources work together.
 
 ## Status by board
 
-| Board | Suite | Tests | Result (2026-10-30) | Loader |
+| Board | Suite | Tests | Result (2026-11-01) | Loader |
 |---|---|---|---|---|
-| WeAct F411CE + W25Q64 | suites + `api-shared/` | 22 | all pass, in one run | `9f1320f` |
-| Pi-Zero RP2350B + PSRAM | `pico2-pizero-shared/` | 77 | all pass, in one run | `86c83d2` |
-| Luckfox Lyra B + SD card | `luckfox-lyra-shared/` | 48 | all pass, in one run | `86c83d2` |
-| Luckfox Lyra B, ARM (A32) | `luckfox-lyra-arm-shared/` | 9 | all pass, in one run | `eb2ae55` (pinned `aaf2120`) |
+| WeAct F411CE + W25Q64 | suites + `api-shared/` | 22 | all pass (`optimal-ram` passed on retry) | `aaf2120` |
+| Pi-Zero RP2350B + PSRAM | `pico2-pizero-shared/` | 77 | all pass, in one run | `aaf2120` |
+| Luckfox Lyra B + SD card | `luckfox-lyra-shared/` | 48 | all pass, in one run | `aaf2120` |
+| Luckfox Lyra B, ARM (A32) | `luckfox-lyra-arm-shared/` | 9 | all pass, in one run | `aaf2120` |
 
-The boards pass at the commits shown. The NUCLEO board has not been validated.
+All four suites were rebuilt and re-run against `SCL-shared` `aaf2120` — the new
+`elf32_read_parse-new.git` `common-elf-reader` with the A32/T32 relocation engine. The boards pass
+at the commit shown. On the WeAct run the first `optimal-ram` attempt lost the target after a
+semihosting breakpoint (an OpenOCD/semihosting transient); the immediate retry passed, and the
+other 21 tests passed in the same run.
 
 The Luckfox Lyra B has its own suite, `luckfox-lyra-shared/`, of 48 tests. All pass, in one run at
-`86c83d2`: see that folder's README. Its ARM-state (A32) suite, `luckfox-lyra-arm-shared/`, has 9
-tests — one per SCL loader, with every fixture built `-marm` — and all 9 pass at `eb2ae55`
-(the submodules now pin `aaf2120`, which adds the ARM documentation). That
-commit uses the `elf32_read_parse-new.git` `common-elf-reader` submodule with the A32 relocation
-engine.
+`aaf2120`. Its ARM-state (A32) suite, `luckfox-lyra-arm-shared/`, has 9 tests — one per SCL loader,
+with every fixture built `-marm` — and all 9 also pass at `aaf2120`.
 
-The `SCL-shared` submodule pins `aaf2120` (code `eb2ae55` plus the ARM docs). The WeAct results above are from `9f1320f` and have not
-been re-run at the new commit.
+The `SCL-shared` submodule pins `aaf2120`; the top-level `common-elf-reader` submodule is
+`elf32_read_parse-new.git` `f650889`.
 
 ## WeAct F411CE status (verified)
 

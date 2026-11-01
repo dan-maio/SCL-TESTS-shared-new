@@ -146,7 +146,8 @@ results there.
 
 ## Status
 
-One full run of all 77 tests passed on the board (2026-10-31), with the loader at `86c83d2`. That loader
+One full run of all 77 tests passed on the board (2026-11-01), with the loader at `aaf2120` (the
+`elf32_read_parse-new.git` parser). That loader
 has not yet run on the WeAct board.
 As a negative control, removing the module's lock made `scl-smp-reloc-sram` fail with
 `shared=79163 of 80000`.

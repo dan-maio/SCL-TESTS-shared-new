@@ -78,7 +78,8 @@ That is the shutdown cutting off a running test, not a probe fault.
 
 ## Status
 
-All 48 tests passed in one full run on the board (2026-10-31), with the loader at `86c83d2`. No test
+All 48 tests passed in one full run on the board (2026-11-01), with the loader at `aaf2120` (the
+`elf32_read_parse-new.git` parser). No test
 failed or faulted, and `Failed semihosting operation` did not appear.
 
 An earlier full run, before the fixes above, ended at 37 passed and 11 failed, and showed that semihosting
