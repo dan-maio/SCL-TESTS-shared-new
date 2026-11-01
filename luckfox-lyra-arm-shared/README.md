@@ -18,7 +18,8 @@ loader.
 | `arm-xip-dynamic-newlib` | `scl::xip-dynamic-newlib` | libprov, libcons, mylib2 | 2 |
 | `arm-overlay` | `scl::overlay` | ov1, ov2, ovcpp | overlay |
 
-All 9 pass on the Lyra B (2026-11-01) at `SCL-shared` `eb2ae55`, whose
+All 9 pass on the Lyra B (2026-11-01); the run used `SCL-shared` `eb2ae55`, and the
+suite now pins `aaf2120` (the same loader code plus the ARM documentation). Its
 `common-elf-reader` submodule is `elf32_read_parse-new.git` `f650889`.
 
 ## The A32 paths this exercises
