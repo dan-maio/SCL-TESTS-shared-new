@@ -11,6 +11,11 @@ test/build-*/
 *.elf
 __pycache__/
 *.so
+# test-drv links these prebuilt fixtures directly (no rule builds them): keep them tracked.
+!test-static/test-drv/fixtures/libspi.so
+!test-static/test-drv/fixtures/libuart.so
+!test-static/test-drv/fixtures/libled.so
+!test-static/test-drv/fixtures/libcpp_features.so
 test-drv (copy 1)/
 test-drv (copy 1)/
 test-drv (Module class)/

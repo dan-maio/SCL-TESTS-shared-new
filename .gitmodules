@@ -1,6 +1,6 @@
 [submodule "SCL-shared"]
 	path = SCL-shared
-	url = /home/dan/Downloads/GIT/SCL-shared-new.git
+	url = ../SCL-shared-new.git
 [submodule "common-elf-reader"]
 	path = common-elf-reader
-	url = /home/dan/Downloads/GIT/elf32_read_parse-new.git
+	url = ../elf32_read_parse-new.git
