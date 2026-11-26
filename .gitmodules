@@ -7,7 +7,7 @@
 [submodule "uos/micro-os-plus-iii"]
 	path = uos/micro-os-plus-iii
 	url = ../micro-os-plus-iii.git
-	branch = smp-back
+	branch = smp
 [submodule "uos/micro-os-plus-iii-devices"]
 	path = uos/micro-os-plus-iii-devices
 	url = ../micro-os-plus-iii-devices.git

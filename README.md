@@ -153,7 +153,7 @@ cd SCL-TESTS-shared-new && git submodule update --init
 
 The µOS++ III SMP builds (`luckfox-lyra-shared/`, `luckfox-lyra-arm-shared/`, `pico2-pizero-shared/`) take the kernel, the devices package and the
 ports from the `uos/` submodules, which `git submodule update --init` fetches from
-GitHub: `micro-os-plus-iii` (`smp-back`), `micro-os-plus-iii-devices` (`smp`),
+GitHub: `micro-os-plus-iii` (`smp`), `micro-os-plus-iii-devices` (`smp`),
 `micro-os-plus-iii-aarch32` and `micro-os-plus-iii-cortexm` (`smp-back`). Their
 `UOS_PORT_DIR` defaults to `../uos/micro-os-plus-iii-<port>`; set it (with
 `-DUOS_PORT_DIR=...` or in the environment for the run scripts) to use another
