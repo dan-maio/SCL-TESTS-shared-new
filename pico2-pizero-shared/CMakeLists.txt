@@ -6,7 +6,7 @@
 #   cmake --build build
 cmake_minimum_required(VERSION 3.20)
 
-set(UOS_PORT_DIR "/home/dan/Desktop/micro-os-plu-iii-smp-pr-github/micro-os-plus-iii-cortexm"
+set(UOS_PORT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../uos/micro-os-plus-iii-cortexm"
     CACHE PATH "micro-os-plus-iii-cortexm working copy")
 if(NOT CMAKE_TOOLCHAIN_FILE)
     set(CMAKE_TOOLCHAIN_FILE "${UOS_PORT_DIR}/../micro-os-plus-iii/cmake/toolchains/arm-none-eabi.cmake")

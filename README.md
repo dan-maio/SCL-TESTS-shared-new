@@ -151,6 +151,14 @@ git clone /home/dan/Downloads/GIT/SCL-TESTS-shared-new.git
 cd SCL-TESTS-shared-new && git submodule update --init
 ```
 
+The µOS++ III SMP builds (`luckfox-lyra-shared/`, `luckfox-lyra-arm-shared/`, `pico2-pizero-shared/`) take the kernel, the devices package and the
+ports from the `uos/` submodules, which `git submodule update --init` fetches from
+GitHub: `micro-os-plus-iii` (`smp-back`), `micro-os-plus-iii-devices` (`smp`),
+`micro-os-plus-iii-aarch32` and `micro-os-plus-iii-cortexm` (`smp-back`). Their
+`UOS_PORT_DIR` defaults to `../uos/micro-os-plus-iii-<port>`; set it (with
+`-DUOS_PORT_DIR=...` or in the environment for the run scripts) to use another
+working copy.
+
 The tree is not self-contained, so it only builds as-is on this machine:
 
 - Seven tracked symlinks point at absolute paths under

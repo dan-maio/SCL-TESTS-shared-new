@@ -60,7 +60,7 @@ cmake --build build --target arm-tests -j8
 
 BUILD=$PWD/build \
 OPENOCD=$PWD/../../SCL-EXAMPLES-shared-new/luckfox-lyra/openocd-linebuf.sh \
-  /home/dan/Desktop/micro-os-plu-iii-smp-pr-github/micro-os-plus-iii-aarch32/test/boards/luckfox-lyra/hw.sh arm-reloc 180
+  ../uos/micro-os-plus-iii-aarch32/test/boards/luckfox-lyra/hw.sh arm-reloc 180
 ```
 
 Or run all nine:
@@ -69,7 +69,7 @@ Or run all nine:
 for t in arm-reloc arm-static arm-optimal arm-dynamic-nolib arm-dynamic-newlib \
          arm-xip-static arm-xip-dynamic-nolib arm-xip-dynamic-newlib arm-overlay; do
   BUILD=$PWD/build OPENOCD=... \
-    /home/dan/Desktop/micro-os-plu-iii-smp-pr-github/micro-os-plus-iii-aarch32/test/boards/luckfox-lyra/hw.sh "$t" 180
+    ../uos/micro-os-plus-iii-aarch32/test/boards/luckfox-lyra/hw.sh "$t" 180
 done
 ```
 

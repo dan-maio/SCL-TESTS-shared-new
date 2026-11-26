@@ -12,7 +12,7 @@
 # UOS_PORT_DIR, BUILD.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-UOS_PORT_DIR="${UOS_PORT_DIR:-/home/dan/Desktop/micro-os-plu-iii-smp-pr-github/micro-os-plus-iii-aarch32}"
+UOS_PORT_DIR="${UOS_PORT_DIR:-$HERE/../uos/micro-os-plus-iii-aarch32}"
 BUILD="${BUILD:-$HERE/build}"
 SECS="${SECS:-300}"
 GAP="${GAP:-3}"

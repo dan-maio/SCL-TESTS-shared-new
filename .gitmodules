@@ -4,3 +4,19 @@
 [submodule "common-elf-reader"]
 	path = common-elf-reader
 	url = ../elf32_read_parse-new.git
+[submodule "uos/micro-os-plus-iii"]
+	path = uos/micro-os-plus-iii
+	url = ../micro-os-plus-iii.git
+	branch = smp-back
+[submodule "uos/micro-os-plus-iii-devices"]
+	path = uos/micro-os-plus-iii-devices
+	url = ../micro-os-plus-iii-devices.git
+	branch = smp
+[submodule "uos/micro-os-plus-iii-aarch32"]
+	path = uos/micro-os-plus-iii-aarch32
+	url = ../micro-os-plus-iii-aarch32.git
+	branch = smp-back
+[submodule "uos/micro-os-plus-iii-cortexm"]
+	path = uos/micro-os-plus-iii-cortexm
+	url = ../micro-os-plus-iii-cortexm.git
+	branch = smp-back
